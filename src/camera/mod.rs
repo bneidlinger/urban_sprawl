@@ -1,0 +1,115 @@
+//! Orthographic camera system with zoom, pan, and rotate controls.
+
+use bevy::prelude::*;
+
+pub struct CameraPlugin;
+
+impl Plugin for CameraPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, setup_camera)
+            .add_systems(Update, (camera_zoom, camera_pan, camera_rotate));
+    }
+}
+
+/// Marker component for the main isometric camera.
+#[derive(Component)]
+pub struct IsometricCamera {
+    pub zoom: f32,
+    pub rotation: f32,
+}
+
+impl Default for IsometricCamera {
+    fn default() -> Self {
+        Self {
+            zoom: 1.0,
+            rotation: 0.0,
+        }
+    }
+}
+
+fn setup_camera(mut commands: Commands) {
+    // Standard isometric angle: ~35.264 degrees (arctan(1/sqrt(2)))
+    let iso_angle = 35.264_f32.to_radians();
+    let distance = 500.0;
+
+    commands.spawn((
+        Camera3d::default(),
+        Projection::Orthographic(OrthographicProjection {
+            scale: 0.1,
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(distance, distance * iso_angle.tan(), distance)
+            .looking_at(Vec3::ZERO, Vec3::Y),
+        IsometricCamera::default(),
+    ));
+}
+
+fn camera_zoom(
+    mut query: Query<(&mut Projection, &mut IsometricCamera)>,
+    mut scroll_events: EventReader<bevy::input::mouse::MouseWheel>,
+) {
+    let scroll: f32 = scroll_events.read().map(|e| e.y).sum();
+    if scroll == 0.0 {
+        return;
+    }
+
+    for (mut projection, mut iso_cam) in &mut query {
+        iso_cam.zoom = (iso_cam.zoom - scroll * 0.1).clamp(0.1, 10.0);
+        if let Projection::Orthographic(ref mut ortho) = *projection {
+            ortho.scale = iso_cam.zoom * 0.1;
+        }
+    }
+}
+
+fn camera_pan(
+    mut query: Query<&mut Transform, With<IsometricCamera>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    let mut direction = Vec3::ZERO;
+    let speed = 100.0;
+
+    if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
+        direction.z -= 1.0;
+    }
+    if keys.pressed(KeyCode::KeyS) || keys.pressed(KeyCode::ArrowDown) {
+        direction.z += 1.0;
+    }
+    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
+        direction.x -= 1.0;
+    }
+    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
+        direction.x += 1.0;
+    }
+
+    if direction != Vec3::ZERO {
+        let delta = direction.normalize() * speed * time.delta_secs();
+        for mut transform in &mut query {
+            transform.translation += delta;
+        }
+    }
+}
+
+fn camera_rotate(
+    mut query: Query<(&mut Transform, &mut IsometricCamera)>,
+    keys: Res<ButtonInput<KeyCode>>,
+    time: Res<Time>,
+) {
+    let rotation_speed = 1.0;
+    let mut rotation_delta = 0.0;
+
+    if keys.pressed(KeyCode::KeyQ) {
+        rotation_delta -= rotation_speed * time.delta_secs();
+    }
+    if keys.pressed(KeyCode::KeyE) {
+        rotation_delta += rotation_speed * time.delta_secs();
+    }
+
+    if rotation_delta != 0.0 {
+        for (mut transform, mut iso_cam) in &mut query {
+            iso_cam.rotation += rotation_delta;
+            let target = Vec3::ZERO; // TODO: Track actual look-at target
+            transform.rotate_around(target, Quat::from_rotation_y(rotation_delta));
+        }
+    }
+}

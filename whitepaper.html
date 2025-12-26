@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Aethelgard: AI-Assisted City Sim Architecture</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate-50 */
+            color: #0f172a; /* Slate-900 */
+        }
+        
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #64748b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 300px;
+            max-height: 400px;
+            margin: 0 auto;
+        }
+
+        .iso-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .iso-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .blueprint-grid {
+            background-image: linear-gradient(#e2e8f0 1px, transparent 1px), linear-gradient(90deg, #e2e8f0 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+    </style>
+    <!-- Chosen Palette: "Architectural Slate" - Warm Neutrals (Slate-50) background, Deep Blue/Slate text, Amber/Blue accents for data. Minimalist and technical. -->
+    
+    <!-- Application Structure Plan: 
+         1. Executive Dashboard: High-level summary of the research goal (AI + Isometric Sim).
+         2. Tech Stack Analyzer: Interactive Radar chart comparing Engines (Three.js, Unity, Godot) based on AI-friendliness and Web capability.
+         3. Architecture Lab: Explains ECS (Entity Component System) vs OOP with interactive code-structure toggles.
+         4. Procedural Core: Visualizes algorithms like Perlin Noise and Wave Function Collapse (conceptual charts).
+         5. Performance Foundry: Data visualization of Instanced Rendering vs Standard Rendering for large-scale cities.
+         This structure moves from "Tools" to "Structure" to "Content" to "Optimization", mirroring the dev process.
+    -->
+
+    <!-- Visualization & Content Choices:
+         1. Engine Comparison Radar: Goal -> Compare multi-variable suitability. Method -> Chart.js Radar. Interaction -> Toggle engines to compare.
+         2. Rendering Performance Line Chart: Goal -> Show scalability of Instanced Mesh. Method -> Chart.js Line. Interaction -> Slider to simulate 'Entity Count'.
+         3. Procedural Logic Diagram: Goal -> Explain generation pipelines. Method -> CSS Grid/Flex interactive diagram (No SVG).
+         4. All Icons: Unicode characters to maintain "No SVG" rule.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+</head>
+<body class="blueprint-grid min-h-screen flex flex-col">
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl mr-2">🏗️</span>
+                    <span class="font-bold text-xl tracking-tight text-slate-800">Sim<span class="text-blue-600">Architect</span>.ai</span>
+                </div>
+                <div class="hidden md:flex space-x-8 items-center">
+                    <button onclick="navTo('section-stack')" class="text-slate-600 hover:text-blue-600 font-medium transition-colors">Tech Stack</button>
+                    <button onclick="navTo('section-arch')" class="text-slate-600 hover:text-blue-600 font-medium transition-colors">Architecture</button>
+                    <button onclick="navTo('section-pcg')" class="text-slate-600 hover:text-blue-600 font-medium transition-colors">Procedural Gen</button>
+                    <button onclick="navTo('section-perf')" class="text-slate-600 hover:text-blue-600 font-medium transition-colors">Performance</button>
+                </div>
+                <!-- Mobile Menu Button (Functional placeholder) -->
+                <div class="md:hidden flex items-center">
+                    <button id="mobile-menu-btn" class="text-slate-600 p-2">☰</button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile Menu Dropdown -->
+        <div id="mobile-menu" class="hidden md:hidden bg-white border-b border-slate-200">
+            <div class="px-2 pt-2 pb-3 space-y-1">
+                <button onclick="navTo('section-stack')" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-slate-50 w-full text-left">Tech Stack</button>
+                <button onclick="navTo('section-arch')" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-slate-50 w-full text-left">Architecture</button>
+                <button onclick="navTo('section-pcg')" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-slate-50 w-full text-left">Procedural Gen</button>
+                <button onclick="navTo('section-perf')" class="block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:bg-slate-50 w-full text-left">Performance</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header / Executive Summary -->
+    <header class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+            <div class="lg:flex lg:items-center lg:justify-between">
+                <div class="max-w-2xl">
+                    <h1 class="text-4xl font-extrabold text-slate-900 sm:text-5xl">
+                        AI-Driven Isometric City Sim
+                    </h1>
+                    <p class="mt-4 text-xl text-slate-600 leading-relaxed">
+                        A technical "Source Report" deep dive into building large-scale, procedurally generated 2.5D simulations using <span class="font-semibold text-blue-600">AI Coding Assistants</span> (Claude, GPT-4) as the primary development engine.
+                    </p>
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">Web-First</span>
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-emerald-100 text-emerald-800">ECS Pattern</span>
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-100 text-amber-800">Procedural Gen</span>
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-slate-100 text-slate-800">Three.js / R3F</span>
+                    </div>
+                </div>
+                <div class="mt-8 lg:mt-0 lg:ml-8 flex-shrink-0">
+                    <div class="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 class="text-sm font-bold text-slate-500 uppercase tracking-wide">Key Directive</h3>
+                        <p class="mt-2 text-slate-800 font-medium">"Leverage text-based code generation for graphics and logic."</p>
+                        <div class="mt-4 text-sm text-slate-600">
+                            <div class="flex justify-between py-1 border-b border-slate-200"><span>Target Scale:</span> <span class="font-mono font-bold">100k+ Entities</span></div>
+                            <div class="flex justify-between py-1 border-b border-slate-200"><span>Perspective:</span> <span class="font-mono font-bold">Orthographic (2.5D)</span></div>
+                            <div class="flex justify-between py-1"><span>Dev Strategy:</span> <span class="font-mono font-bold">AI Pair Programming</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+
+        <!-- Section 1: The Tech Stack (Radar Chart) -->
+        <section id="section-stack" class="scroll-mt-24">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">1. The Tech Stack</h2>
+                <p class="mt-4 text-lg text-slate-600 max-w-4xl">
+                    Choosing the right engine is critical when AI is the primary coder. AI models excel at generating verbose, text-based code (TypeScript/JS) but struggle with binary asset management or GUI-heavy workflows (like Unity/Unreal editors). We analyzed three primary stacks for their "AI-Co-Pilot Viability."
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                <!-- Interactive Chart -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 class="text-lg font-semibold text-slate-800 mb-4 flex items-center">
+                        <span class="mr-2">📊</span> Suitability Matrix
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="stackChart"></canvas>
+                    </div>
+                    <div class="mt-4 flex justify-center space-x-4">
+                        <button onclick="updateStackChart('three')" class="px-3 py-1 text-sm bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-medium border border-blue-200">Three.js / React</button>
+                        <button onclick="updateStackChart('godot')" class="px-3 py-1 text-sm bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 font-medium border border-emerald-200">Godot (GDScript)</button>
+                        <button onclick="updateStackChart('unity')" class="px-3 py-1 text-sm bg-slate-50 text-slate-700 rounded hover:bg-slate-100 font-medium border border-slate-200">Unity (C#)</button>
+                    </div>
+                </div>
+
+                <!-- Detail Content -->
+                <div class="space-y-6">
+                    <div id="stack-details" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full">
+                        <h3 id="stack-title" class="text-xl font-bold text-slate-900">Recommendation: Three.js + React Three Fiber</h3>
+                        <div class="mt-4 space-y-4">
+                            <div>
+                                <h4 class="font-bold text-blue-600 text-sm uppercase">Why it wins for AI Dev</h4>
+                                <p id="stack-reason" class="text-slate-600 text-sm mt-1">
+                                    LLMs (Claude, GPT-4) have been trained on billions of lines of React and JavaScript. They can generate complete 3D components, hooks, and logic in a single text file. There are no binary `.scene` files to corrupt.
+                                </p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="bg-slate-50 p-3 rounded border border-slate-100">
+                                    <div class="text-xs font-semibold text-slate-500 uppercase">Boilerplate Speed</div>
+                                    <div id="stack-stat-1" class="text-2xl font-bold text-slate-800">High</div>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded border border-slate-100">
+                                    <div class="text-xs font-semibold text-slate-500 uppercase">Web Deploy</div>
+                                    <div id="stack-stat-2" class="text-2xl font-bold text-slate-800">Native</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-700 text-sm uppercase mt-2">Critical Trade-off</h4>
+                                <p id="stack-tradeoff" class="text-slate-600 text-sm mt-1">
+                                    Performance requires strict discipline (InstancedMesh, manual memory management) compared to compiled engines.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Architecture (ECS Visualizer) -->
+        <section id="section-arch" class="scroll-mt-24">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">2. Architecture: The ECS Pattern</h2>
+                <p class="mt-4 text-lg text-slate-600 max-w-4xl">
+                    For a city simulation with thousands of moving parts, Object-Oriented Programming (OOP) creates "spaghetti code" that confuses AI assistants. The <strong>Entity Component System (ECS)</strong> pattern decouples data from logic, allowing AI to write small, isolated "Systems" without breaking the whole game.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-200">
+                    
+                    <!-- Column 1: Entities -->
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800">Entities (ID)</h3>
+                            <span class="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">The "Things"</span>
+                        </div>
+                        <div class="space-y-2" id="entity-list">
+                            <!-- JS Generated -->
+                        </div>
+                        <button onclick="addEntity()" class="mt-4 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded hover:border-blue-400 hover:text-blue-600 transition-colors text-sm font-bold">+ New Entity</button>
+                    </div>
+
+                    <!-- Column 2: Components -->
+                    <div class="p-6 bg-slate-50">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800">Components (Data)</h3>
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">Pure JSON</span>
+                        </div>
+                        <div class="text-xs font-mono text-slate-600 space-y-3">
+                            <div class="p-3 bg-white rounded shadow-sm border border-slate-200">
+                                <div class="text-blue-600 font-bold mb-1">Position { ... }</div>
+                                <div>x: 102, y: 0, z: 45</div>
+                            </div>
+                            <div class="p-3 bg-white rounded shadow-sm border border-slate-200">
+                                <div class="text-emerald-600 font-bold mb-1">BuildingType { ... }</div>
+                                <div>type: "residential_high", level: 3</div>
+                            </div>
+                            <div class="p-3 bg-white rounded shadow-sm border border-slate-200">
+                                <div class="text-amber-600 font-bold mb-1">PowerConsumer { ... }</div>
+                                <div>draw: 50MW, connected: true</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Column 3: Systems -->
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-bold text-slate-800">Systems (Logic)</h3>
+                            <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">The Loops</span>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="group relative p-4 bg-white hover:bg-blue-50 border border-slate-200 rounded transition-colors cursor-pointer" onclick="highlightSystem('render')">
+                                <h4 class="font-bold text-slate-700">Renderer System</h4>
+                                <p class="text-xs text-slate-500 mt-1">Queries: [Position, Mesh]</p>
+                                <p class="text-xs text-slate-500">Action: Updates Three.js InstancedMesh</p>
+                            </div>
+                            <div class="group relative p-4 bg-white hover:bg-amber-50 border border-slate-200 rounded transition-colors cursor-pointer" onclick="highlightSystem('power')">
+                                <h4 class="font-bold text-slate-700">Power Grid System</h4>
+                                <p class="text-xs text-slate-500 mt-1">Queries: [PowerSource, PowerConsumer]</p>
+                                <p class="text-xs text-slate-500">Action: Calculates connectivity graph</p>
+                            </div>
+                            <div class="p-3 bg-slate-100 rounded text-center text-xs text-slate-500 italic">
+                                AI Tip: Ask Claude to "Write a System that updates X based on Y"
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Procedural Generation (Interactive Grid) -->
+        <section id="section-pcg" class="scroll-mt-24">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1">
+                    <h2 class="text-3xl font-bold text-slate-900">3. Procedural Generation</h2>
+                    <p class="mt-4 text-slate-600">
+                        To achieve "Large Scale" without hand-placing assets, we utilize two core algorithms accessible to AI implementation.
+                    </p>
+                    <div class="mt-8 space-y-6">
+                        <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                            <h4 class="font-bold text-slate-800">A. Perlin/Simplex Noise</h4>
+                            <p class="text-sm text-slate-600 mt-1">Used for terrain heightmaps, moisture maps, and biomes. Continuous, smooth randomness.</p>
+                            <button onclick="generateGrid('noise')" class="mt-3 text-xs bg-slate-800 text-white px-3 py-2 rounded hover:bg-slate-700">Visualize Noise Layer</button>
+                        </div>
+                        <div class="p-4 bg-white border border-slate-200 rounded-lg">
+                            <h4 class="font-bold text-slate-800">B. Cellular Automata</h4>
+                            <p class="text-sm text-slate-600 mt-1">Used for "organic" city zoning or cave systems. Rules based on neighbor states.</p>
+                            <button onclick="generateGrid('automata')" class="mt-3 text-xs bg-slate-800 text-white px-3 py-2 rounded hover:bg-slate-700">Visualize Zoning Growth</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="lg:col-span-2">
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-full flex flex-col items-center justify-center">
+                        <h3 id="grid-title" class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Algorithm Visualizer</h3>
+                        <!-- A CSS Grid representing map tiles -->
+                        <div id="pcg-grid" class="grid grid-cols-10 gap-1 w-full max-w-md aspect-square bg-slate-100 p-2 rounded">
+                            <!-- Generated via JS -->
+                        </div>
+                        <div class="mt-4 flex justify-between w-full max-w-md text-xs text-slate-500">
+                            <span>0,0</span>
+                            <span id="gen-method">Method: Noise</span>
+                            <span>10,10</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Performance (Instanced Rendering Chart) -->
+        <section id="section-perf" class="scroll-mt-24 pb-12">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-900">4. Rendering at Scale</h2>
+                <p class="mt-4 text-lg text-slate-600 max-w-4xl">
+                    The bottleneck in web-based city sims is "Draw Calls." A naive approach draws every building individually. The <strong>InstancedMesh</strong> approach draws 100,000 buildings in a single GPU call.
+                </p>
+            </div>
+
+            <div class="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
+                <div class="flex flex-col md:flex-row items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-800">FPS vs. Entity Count</h3>
+                        <p class="text-sm text-slate-500">Comparing Naive Mesh vs. Instanced Mesh (WebGL)</p>
+                    </div>
+                    <div class="mt-4 md:mt-0 w-full md:w-64 bg-slate-50 p-4 rounded border border-slate-200">
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Simulation Load: <span id="entity-count-display">10,000</span> Entities</label>
+                        <input type="range" id="entity-slider" min="1000" max="100000" step="1000" value="10000" class="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="perfChart"></canvas>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div class="p-4 bg-red-50 rounded border border-red-100">
+                        <div class="font-bold text-red-800 mb-2">🚫 Naive Approach</div>
+                        <p class="text-sm text-red-700">
+                            10,000 Buildings = 10,000 Draw Calls.<br>
+                            CPU chokes communicating with GPU.<br>
+                            <strong>Result:</strong> Browser freezes at ~5k objects.
+                        </p>
+                    </div>
+                    <div class="p-4 bg-emerald-50 rounded border border-emerald-100">
+                        <div class="font-bold text-emerald-800 mb-2">✅ Instanced Rendering</div>
+                        <div class="text-sm text-emerald-700">
+                            10,000 Buildings = 1 Draw Call.<br>
+                            GPU handles positions via Matrix attributes.<br>
+                            <strong>Result:</strong> Smooth 60fps up to ~150k objects.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-500 text-sm">Generated Research Report for AI-Assisted Game Development.</p>
+            <p class="text-slate-400 text-xs mt-2">© 2024 SimArchitect.ai Research Group</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- 1. Radar Chart Logic (Tech Stack) ---
+        const stackCtx = document.getElementById('stackChart').getContext('2d');
+        
+        // Data configurations
+        const stackData = {
+            three: {
+                label: 'Three.js / React',
+                data: [95, 60, 90, 85, 40], // AI-Gen ease, Tooling, Web-Native, Flexibility, Out-of-box Features
+                desc: "LLMs generate React/Three.js code flawlessly. Best for 'Code-as-Scene'.",
+                bg: 'rgba(37, 99, 235, 0.2)',
+                border: 'rgba(37, 99, 235, 1)'
+            },
+            godot: {
+                label: 'Godot (GDScript)',
+                data: [75, 80, 70, 80, 85],
+                desc: "GDScript is Python-like and easy for AI, but scene files are binary/text hybrids that can break.",
+                bg: 'rgba(16, 185, 129, 0.2)',
+                border: 'rgba(16, 185, 129, 1)'
+            },
+            unity: {
+                label: 'Unity (C#)',
+                data: [70, 95, 50, 60, 95],
+                desc: "Powerful, but AI struggles to manage the Editor-Script relationship and massive .meta files.",
+                bg: 'rgba(100, 116, 139, 0.2)',
+                border: 'rgba(100, 116, 139, 1)'
+            }
+        };
+
+        let currentStackChart = new Chart(stackCtx, {
+            type: 'radar',
+            data: {
+                labels: ['AI Code Gen Ease', 'Visual Tooling', 'Web Native Perf', 'Flexibility', 'Built-in Features'],
+                datasets: [{
+                    label: stackData.three.label,
+                    data: stackData.three.data,
+                    backgroundColor: stackData.three.bg,
+                    borderColor: stackData.three.border,
+                    pointBackgroundColor: stackData.three.border,
+                    pointBorderColor: '#fff',
+                    pointHoverBackgroundColor: '#fff',
+                    pointHoverBorderColor: stackData.three.border
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: { color: '#e2e8f0' },
+                        grid: { color: '#e2e8f0' },
+                        pointLabels: {
+                            font: { size: 11, family: 'Inter' },
+                            color: '#64748b'
+                        },
+                        ticks: { display: false, max: 100 }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        function updateStackChart(key) {
+            const data = stackData[key];
+            
+            // Update Chart
+            currentStackChart.data.datasets[0].label = data.label;
+            currentStackChart.data.datasets[0].data = data.data;
+            currentStackChart.data.datasets[0].backgroundColor = data.bg;
+            currentStackChart.data.datasets[0].borderColor = data.border;
+            currentStackChart.data.datasets[0].pointBackgroundColor = data.border;
+            currentStackChart.data.datasets[0].pointHoverBorderColor = data.border;
+            currentStackChart.update();
+
+            // Update Text
+            document.getElementById('stack-title').innerText = `Recommendation: ${data.label}`;
+            document.getElementById('stack-title').className = `text-xl font-bold ${key === 'three' ? 'text-blue-600' : key === 'godot' ? 'text-emerald-600' : 'text-slate-600'}`;
+            document.getElementById('stack-reason').innerText = data.desc;
+            
+            // Simulating changing stats visually
+            document.getElementById('stack-stat-1').innerText = key === 'three' ? 'High' : (key === 'godot' ? 'Med' : 'Low');
+            document.getElementById('stack-stat-2').innerText = key === 'three' ? 'Native' : (key === 'godot' ? 'WASM' : 'Heavy');
+        }
+
+        // --- 2. ECS Visualizer Logic ---
+        const entities = [
+            { id: 101, name: "Power Plant", icon: "⚡" },
+            { id: 102, name: "Apartment A", icon: "🏢" },
+            { id: 103, name: "Road Seg 4", icon: "🛣️" },
+            { id: 104, name: "Citizen 99", icon: "🚶" }
+        ];
+
+        function renderEntities() {
+            const container = document.getElementById('entity-list');
+            container.innerHTML = entities.map(e => `
+                <div class="flex items-center space-x-3 p-2 bg-white rounded border border-slate-200 shadow-sm animate-fade-in">
+                    <div class="w-8 h-8 flex items-center justify-center bg-slate-100 rounded text-lg">${e.icon}</div>
+                    <div>
+                        <div class="text-sm font-bold text-slate-700">${e.name}</div>
+                        <div class="text-xs text-slate-400 font-mono">ID: ${e.id}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function addEntity() {
+            const types = [
+                {name: "Office Tower", icon: "🏢"},
+                {name: "Tree", icon: "🌳"},
+                {name: "Car", icon: "🚗"},
+                {name: "Factory", icon: "🏭"}
+            ];
+            const random = types[Math.floor(Math.random() * types.length)];
+            entities.push({ id: 100 + entities.length + 1, name: random.name, icon: random.icon });
+            if (entities.length > 6) entities.shift(); // Keep list short
+            renderEntities();
+        }
+        
+        renderEntities();
+
+        function highlightSystem(sys) {
+            // Visual feedback only
+            const color = sys === 'render' ? 'blue' : 'amber';
+            alert(`Simulating ${sys === 'render' ? 'Renderer' : 'Power Grid'} System logic... AI would generate a loop iterating over relevant Component arrays.`);
+        }
+
+        // --- 3. Procedural Grid Visualizer ---
+        const gridContainer = document.getElementById('pcg-grid');
+        
+        function generateGrid(method) {
+            gridContainer.innerHTML = '';
+            document.getElementById('gen-method').innerText = `Method: ${method === 'noise' ? 'Perlin Noise (Terrain)' : 'Cellular Automata (Zoning)'}`;
+            
+            for (let i = 0; i < 100; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'w-full h-full rounded-sm transition-all duration-500';
+                
+                let colorClass = '';
+                if (method === 'noise') {
+                    // Simple simulated noise gradient
+                    const val = Math.random();
+                    if (val < 0.3) colorClass = 'bg-blue-500'; // Water
+                    else if (val < 0.6) colorClass = 'bg-emerald-400'; // Grass
+                    else if (val < 0.8) colorClass = 'bg-stone-400'; // Rock
+                    else colorClass = 'bg-white'; // Snow
+                } else {
+                    // Simulated zoning/automata (clustering)
+                    const val = Math.random();
+                    if (val < 0.2) colorClass = 'bg-amber-400'; // Res
+                    else if (val < 0.25) colorClass = 'bg-purple-500'; // Ind
+                    else colorClass = 'bg-slate-200'; // Empty
+                }
+                
+                cell.className += ` ${colorClass}`;
+                gridContainer.appendChild(cell);
+            }
+        }
+        
+        // Initial Grid
+        generateGrid('noise');
+
+        // --- 4. Performance Chart Logic ---
+        const perfCtx = document.getElementById('perfChart').getContext('2d');
+        const entitySlider = document.getElementById('entity-slider');
+        const entityDisplay = document.getElementById('entity-count-display');
+
+        // Generate static data curve for chart
+        const labels = [1000, 10000, 25000, 50000, 75000, 100000];
+        const instancedFPS = [60, 60, 58, 55, 45, 30]; // Good
+        const naiveFPS = [60, 15, 5, 1, 0, 0]; // Bad
+
+        const perfChart = new Chart(perfCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'InstancedMesh (Recommended)',
+                        data: instancedFPS,
+                        borderColor: '#10b981', // Emerald
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Standard Mesh (Naive)',
+                        data: naiveFPS,
+                        borderColor: '#ef4444', // Red
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Frames Per Second (FPS)' },
+                        min: 0,
+                        max: 70
+                    },
+                    x: {
+                        title: { display: true, text: 'Entity Count' }
+                    }
+                }
+            }
+        });
+
+        // Slider interaction
+        entitySlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            entityDisplay.innerText = val.toLocaleString();
+            
+            // Simple interpolation for "current" marker (visual only, chart stays static for context)
+            // In a real app, we might update a specific "current value" line
+        });
+
+        // --- Navigation Logic ---
+        function navTo(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Mobile Menu Toggle
+        document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+            const menu = document.getElementById('mobile-menu');
+            menu.classList.toggle('hidden');
+        });
+
+    </script>
+</body>
+</html>

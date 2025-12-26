@@ -1,0 +1,24 @@
+[package]
+name = "isocitysim"
+version = "0.1.0"
+edition = "2021"
+authors = ["Urban Sprawl Team"]
+description = "Large-scale isometric city simulator with procedural generation"
+
+[dependencies]
+bevy = { version = "0.15", features = ["dynamic_linking"] }
+petgraph = "0.6"
+noise = "0.9"
+rand = "0.8"
+smallvec = "1.13"
+bytemuck = { version = "1.14", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
