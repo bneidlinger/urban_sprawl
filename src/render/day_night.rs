@@ -1,7 +1,7 @@
 //! Day/night cycle with sun animation and atmospheric changes.
 
 use bevy::{
-    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, FogFalloff, FogSettings},
     prelude::*,
 };
 
@@ -14,12 +14,17 @@ impl Plugin for DayNightPlugin {
             // Shadow map resolution (2048 is good balance of quality/performance)
             .insert_resource(DirectionalLightShadowMap { size: 2048 })
             .add_systems(Startup, setup_lighting)
-            .add_systems(Update, (
-                advance_time,
-                update_sun_position,
-                update_ambient_light,
-                update_sky_color,
-            ).chain());
+            .add_systems(
+                Update,
+                (
+                    advance_time,
+                    update_sun_position,
+                    update_ambient_light,
+                    update_sky_color,
+                    update_fog,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -38,7 +43,7 @@ impl Default for TimeOfDay {
     fn default() -> Self {
         Self {
             time: 0.35, // Start at morning (8:24 AM)
-            speed: 0.5,  // Half speed for nice viewing
+            speed: 0.5, // Half speed for nice viewing
             paused: false,
         }
     }
@@ -92,6 +97,18 @@ pub struct DayNightConfig {
     pub sky_dawn: Color,
     pub sky_dusk: Color,
     pub sky_night: Color,
+
+    // Fog settings
+    pub fog_color_day: Color,
+    pub fog_color_dawn: Color,
+    pub fog_color_dusk: Color,
+    pub fog_color_night: Color,
+    pub fog_density_day: f32,
+    pub fog_density_dawn: f32,
+    pub fog_density_dusk: f32,
+    pub fog_density_night: f32,
+    pub fog_directional_color: Color,
+    pub fog_directional_exponent: f32,
 }
 
 impl Default for DayNightConfig {
@@ -109,6 +126,17 @@ impl Default for DayNightConfig {
             sky_dawn: Color::srgb(0.9, 0.6, 0.4),
             sky_dusk: Color::srgb(0.9, 0.4, 0.3),
             sky_night: Color::srgb(0.02, 0.02, 0.05),
+
+            fog_color_day: Color::srgba(0.65, 0.73, 0.8, 0.9),
+            fog_color_dawn: Color::srgba(0.82, 0.58, 0.46, 0.95),
+            fog_color_dusk: Color::srgba(0.76, 0.45, 0.4, 0.95),
+            fog_color_night: Color::srgba(0.05, 0.08, 0.12, 0.9),
+            fog_density_day: 0.0015,
+            fog_density_dawn: 0.0025,
+            fog_density_dusk: 0.0025,
+            fog_density_night: 0.001,
+            fog_directional_color: Color::srgba(1.0, 0.82, 0.6, 0.35),
+            fog_directional_exponent: 18.0,
         }
     }
 }
@@ -171,11 +199,7 @@ fn setup_lighting(mut commands: Commands) {
     ));
 }
 
-fn advance_time(
-    time: Res<Time>,
-    mut tod: ResMut<TimeOfDay>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-) {
+fn advance_time(time: Res<Time>, mut tod: ResMut<TimeOfDay>, keyboard: Res<ButtonInput<KeyCode>>) {
     // Toggle pause with P
     if keyboard.just_pressed(KeyCode::KeyP) {
         tod.paused = !tod.paused;
@@ -244,18 +268,14 @@ fn update_sun_position(
 
         // Adjust intensity based on height
         let day_factor = sun_height.max(0.0);
-        light.illuminance = config.sun_intensity_night +
-            (config.sun_intensity_day - config.sun_intensity_night) * day_factor;
+        light.illuminance = config.sun_intensity_night
+            + (config.sun_intensity_day - config.sun_intensity_night) * day_factor;
 
         // Warm color at sunrise/sunset
         let transition = tod.transition_factor();
         if transition < 0.5 {
             // Dawn/dusk - warm orange
-            light.color = Color::srgb(
-                1.0,
-                0.7 + transition * 0.3,
-                0.5 + transition * 0.5,
-            );
+            light.color = Color::srgb(1.0, 0.7 + transition * 0.3, 0.5 + transition * 0.5);
         } else {
             // Day - white
             light.color = Color::WHITE;
@@ -270,12 +290,8 @@ fn update_sun_position(
         let pitch = moon_height.asin().max(-0.1);
         let yaw = moon_angle.cos().atan2(1.0);
 
-        *transform = Transform::from_rotation(Quat::from_euler(
-            EulerRot::YXZ,
-            yaw,
-            -pitch - 0.2,
-            0.0,
-        ));
+        *transform =
+            Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, yaw, -pitch - 0.2, 0.0));
 
         // Moon visible at night
         let night_factor = (-sun_height).max(0.0);
@@ -352,6 +368,60 @@ fn update_sky_color(
     clear_color.0 = color;
 }
 
+fn update_fog(
+    tod: Res<TimeOfDay>,
+    config: Res<DayNightConfig>,
+    mut fog_query: Query<&mut FogSettings, With<Camera3d>>,
+) {
+    let hour = tod.hour();
+    let (color, density) = fog_profile(hour, &config);
+
+    for mut fog in fog_query.iter_mut() {
+        fog.color = color;
+        fog.directional_light_color = config.fog_directional_color;
+        fog.directional_light_exponent = config.fog_directional_exponent;
+        fog.falloff = FogFalloff::Exponential { density };
+    }
+}
+
+fn fog_profile(hour: f32, config: &DayNightConfig) -> (Color, f32) {
+    if hour >= 5.0 && hour < 7.0 {
+        // Dawn
+        let t = (hour - 5.0) / 2.0;
+        (
+            lerp_color(config.fog_color_night, config.fog_color_dawn, t),
+            lerp_scalar(config.fog_density_night, config.fog_density_dawn, t),
+        )
+    } else if hour >= 7.0 && hour < 9.0 {
+        // Dawn to day
+        let t = (hour - 7.0) / 2.0;
+        (
+            lerp_color(config.fog_color_dawn, config.fog_color_day, t),
+            lerp_scalar(config.fog_density_dawn, config.fog_density_day, t),
+        )
+    } else if hour >= 9.0 && hour < 17.0 {
+        // Day
+        (config.fog_color_day, config.fog_density_day)
+    } else if hour >= 17.0 && hour < 19.0 {
+        // Day to dusk
+        let t = (hour - 17.0) / 2.0;
+        (
+            lerp_color(config.fog_color_day, config.fog_color_dusk, t),
+            lerp_scalar(config.fog_density_day, config.fog_density_dusk, t),
+        )
+    } else if hour >= 19.0 && hour < 21.0 {
+        // Dusk to night
+        let t = (hour - 19.0) / 2.0;
+        (
+            lerp_color(config.fog_color_dusk, config.fog_color_night, t),
+            lerp_scalar(config.fog_density_dusk, config.fog_density_night, t),
+        )
+    } else {
+        // Night
+        (config.fog_color_night, config.fog_density_night)
+    }
+}
+
 fn lerp_color(a: Color, b: Color, t: f32) -> Color {
     let a_linear = a.to_linear();
     let b_linear = b.to_linear();
@@ -361,4 +431,8 @@ fn lerp_color(a: Color, b: Color, t: f32) -> Color {
         a_linear.green + (b_linear.green - a_linear.green) * t,
         a_linear.blue + (b_linear.blue - a_linear.blue) * t,
     )
+}
+
+fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
 }
