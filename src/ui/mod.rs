@@ -6,6 +6,7 @@ use bevy::{
 };
 
 use crate::render::day_night::TimeOfDay;
+use crate::simulation::SimulationConfig;
 
 pub mod debug_render;
 
@@ -16,8 +17,17 @@ impl Plugin for UiPlugin {
         app.add_plugins(FrameTimeDiagnosticsPlugin::default())
             .add_plugins(debug_render::DebugRenderPlugin)
             .init_resource::<DebugConfig>()
-            .add_systems(Startup, setup_fps_counter)
-            .add_systems(Update, (update_fps_counter, update_time_display, toggle_debug_views));
+            .add_systems(Startup, setup_hud)
+            .add_systems(
+                Update,
+                (
+                    update_fps_counter,
+                    update_time_display,
+                    update_sim_status,
+                    handle_time_controls,
+                    toggle_debug_views,
+                ),
+            );
     }
 }
 
@@ -55,66 +65,91 @@ struct TimeText;
 #[derive(Component)]
 struct DebugInfoText;
 
-fn setup_fps_counter(mut commands: Commands) {
-    // FPS counter in top-left
-    commands.spawn((
-        Text::new("FPS: --"),
-        TextFont {
-            font_size: 24.0,
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
-            ..default()
-        },
-        FpsText,
-    ));
+/// Marker for simulation status text.
+#[derive(Component)]
+struct SimStatusText;
 
-    // Time display in top-right
-    commands.spawn((
-        Text::new("12:00"),
-        TextFont {
-            font_size: 28.0,
-            ..default()
-        },
-        TextColor(Color::WHITE),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            right: Val::Px(10.0),
-            ..default()
-        },
-        TimeText,
-    ));
+fn setup_hud(mut commands: Commands) {
+    let panel_bg = Color::srgb(0.04, 0.05, 0.06);
+    let border = Color::srgb(0.0, 0.75, 0.35);
+    let retro_green = Color::srgb(0.4, 0.95, 0.6);
+    let retro_orange = Color::srgb(1.0, 0.6, 0.2);
 
-    // Debug toggle info
-    commands.spawn((
-        Text::new("[T] Tensor  [R] Roads  [P] Pause Time  [1-4] Time Presets"),
-        TextFont {
-            font_size: 16.0,
-            ..default()
-        },
-        TextColor(Color::srgb(0.8, 0.8, 0.8)),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(40.0),
-            left: Val::Px(10.0),
-            ..default()
-        },
-        DebugInfoText,
-    ));
+    // Top-left HUD stack
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(10.0),
+                left: Val::Px(10.0),
+                padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                row_gap: Val::Px(6.0),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(panel_bg),
+            BorderColor(border),
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                Text::new("URBAN SPRAWL // SYS MONITOR"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(retro_orange),
+            ));
 
-    // Controls hint
+            parent.spawn((
+                Text::new("FPS: --"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(retro_green),
+                FpsText,
+            ));
+
+            parent.spawn((
+                Text::new("--:-- --"),
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
+                TextColor(retro_green),
+                TimeText,
+            ));
+
+            parent.spawn((
+                Text::new("SIM: 1.0x | TIME: 0.5x"),
+                TextFont {
+                    font_size: 16.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.75, 0.95, 0.8)),
+                SimStatusText,
+            ));
+
+            parent.spawn((
+                Text::new("[P] Pause | [ [ / ] ] Time | [1-4] Dawn/Day/Dusk/Night"),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.7, 0.8, 0.7)),
+                DebugInfoText,
+            ));
+        });
+
+    // Bottom control reminder
     commands.spawn((
-        Text::new("WASD: Pan | Scroll: Zoom | Q/E: Rotate | [/]: Time Speed"),
+        Text::new("WASD: Pan | Scroll: Zoom | Q/E: Rotate | F: Flow | G: Grid"),
         TextFont {
-            font_size: 16.0,
+            font_size: 14.0,
             ..default()
         },
-        TextColor(Color::srgb(0.6, 0.6, 0.6)),
+        TextColor(Color::srgb(0.65, 0.85, 0.7)),
         Node {
             position_type: PositionType::Absolute,
             bottom: Val::Px(10.0),
@@ -176,7 +211,10 @@ fn update_time_display(
 
     for (mut text, mut color) in &mut query {
         let pause_indicator = if tod.paused { " [PAUSED]" } else { "" };
-        **text = format!("{}:{:02} {} - {}{}", display_hour, minutes, ampm, period, pause_indicator);
+        **text = format!(
+            "{}:{:02} {} - {}{}",
+            display_hour, minutes, ampm, period, pause_indicator
+        );
 
         // Color based on time of day
         color.0 = if tod.is_night() {
@@ -191,18 +229,100 @@ fn update_time_display(
     }
 }
 
-/// Toggle debug visualization modes with keyboard.
-fn toggle_debug_views(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut config: ResMut<DebugConfig>,
+fn update_sim_status(
+    config: Res<SimulationConfig>,
+    tod: Res<TimeOfDay>,
+    mut query: Query<&mut Text, With<SimStatusText>>,
 ) {
+    if config.is_changed() || tod.is_changed() {
+        let status = if config.paused || tod.paused {
+            "PAUSED"
+        } else {
+            "LIVE"
+        };
+        let sim_speed = format!("{:.1}x", config.speed);
+        let time_speed = format!("{:.2}x", tod.speed);
+
+        for mut text in &mut query {
+            **text = format!(
+                "SIM: {} | GAME: {} | STATE: {}",
+                sim_speed, time_speed, status
+            );
+        }
+    }
+}
+
+fn handle_time_controls(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut tod: ResMut<TimeOfDay>,
+    mut sim: ResMut<SimulationConfig>,
+) {
+    if keys.just_pressed(KeyCode::KeyP) {
+        tod.paused = !tod.paused;
+        sim.paused = tod.paused;
+    }
+
+    // Speed control for time-of-day (shared with simulation speed for coherence)
+    if keys.just_pressed(KeyCode::BracketLeft) {
+        tod.speed = (tod.speed * 0.5).clamp(0.05, 8.0);
+        sim.speed = (sim.speed * 0.5).clamp(0.1, 8.0);
+    }
+
+    if keys.just_pressed(KeyCode::BracketRight) {
+        tod.speed = (tod.speed * 2.0).clamp(0.05, 8.0);
+        sim.speed = (sim.speed * 2.0).clamp(0.1, 8.0);
+    }
+
+    // Time of day presets
+    if keys.just_pressed(KeyCode::Digit1) {
+        tod.time = 0.20; // Dawn
+    }
+    if keys.just_pressed(KeyCode::Digit2) {
+        tod.time = 0.5; // Midday
+    }
+    if keys.just_pressed(KeyCode::Digit3) {
+        tod.time = 0.75; // Dusk
+    }
+    if keys.just_pressed(KeyCode::Digit4) {
+        tod.time = 0.95; // Late night
+    }
+}
+
+/// Toggle debug visualization modes with keyboard.
+fn toggle_debug_views(keys: Res<ButtonInput<KeyCode>>, mut config: ResMut<DebugConfig>) {
     if keys.just_pressed(KeyCode::KeyT) {
         config.show_tensor_field = !config.show_tensor_field;
-        info!("Tensor field: {}", if config.show_tensor_field { "ON" } else { "OFF" });
+        info!(
+            "Tensor field: {}",
+            if config.show_tensor_field {
+                "ON"
+            } else {
+                "OFF"
+            }
+        );
     }
 
     if keys.just_pressed(KeyCode::KeyR) {
         config.show_road_graph = !config.show_road_graph;
-        info!("Road graph: {}", if config.show_road_graph { "ON" } else { "OFF" });
+        info!(
+            "Road graph: {}",
+            if config.show_road_graph { "ON" } else { "OFF" }
+        );
+    }
+
+    if keys.just_pressed(KeyCode::KeyF) {
+        config.show_flow_fields = !config.show_flow_fields;
+        info!(
+            "Flow fields: {}",
+            if config.show_flow_fields { "ON" } else { "OFF" }
+        );
+    }
+
+    if keys.just_pressed(KeyCode::KeyG) {
+        config.show_grid = !config.show_grid;
+        info!(
+            "Grid overlay: {}",
+            if config.show_grid { "ON" } else { "OFF" }
+        );
     }
 }
