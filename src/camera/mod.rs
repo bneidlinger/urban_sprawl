@@ -1,6 +1,9 @@
 //! Orthographic camera system with zoom, pan, and rotate controls.
 
-use bevy::prelude::*;
+use bevy::{
+    pbr::{FogFalloff, FogSettings},
+    prelude::*,
+};
 
 pub struct CameraPlugin;
 
@@ -40,6 +43,12 @@ fn setup_camera(mut commands: Commands) {
         }),
         Transform::from_xyz(distance, distance * iso_angle.tan(), distance)
             .looking_at(Vec3::ZERO, Vec3::Y),
+        FogSettings {
+            color: Color::srgba(0.6, 0.7, 0.8, 0.85),
+            falloff: FogFalloff::Exponential { density: 0.0015 },
+            directional_light_color: Color::srgba(1.0, 0.8, 0.6, 0.3),
+            directional_light_exponent: 12.0,
+        },
         IsometricCamera::default(),
     ));
 }
