@@ -2,16 +2,17 @@
 
 use bevy::prelude::*;
 
-use crate::procgen::road_generator::RoadsGenerated;
 use crate::procgen::roads::{RoadGraph, RoadType};
 use crate::render::road_mesh::RoadMeshGenerated;
+use crate::render::day_night::TimeOfDay;
 
 pub struct StreetLampsPlugin;
 
 impl Plugin for StreetLampsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LampConfig>()
-            .add_systems(Update, spawn_street_lamps.run_if(should_spawn_lamps));
+            .add_systems(Update, spawn_street_lamps.run_if(should_spawn_lamps))
+            .add_systems(Update, update_lamp_brightness);
     }
 }
 
@@ -25,6 +26,9 @@ fn should_spawn_lamps(
 #[derive(Component)]
 pub struct StreetLamp;
 
+#[derive(Component)]
+pub struct LampFixture;
+
 #[derive(Resource)]
 pub struct LampConfig {
     pub spacing: f32,
@@ -37,11 +41,11 @@ pub struct LampConfig {
 impl Default for LampConfig {
     fn default() -> Self {
         Self {
-            spacing: 25.0,
-            pole_height: 5.0,
-            pole_radius: 0.12,
-            light_radius: 0.4,
-            offset_from_road: 6.0,
+            spacing: 30.0,        // ~30m between lamps (realistic)
+            pole_height: 8.0,     // 8m tall (realistic street lamp)
+            pole_radius: 0.15,
+            light_radius: 0.5,
+            offset_from_road: 5.0,
         }
     }
 }
@@ -132,6 +136,7 @@ fn spawn_street_lamps(
                     MeshMaterial3d(light_material.clone()),
                     Transform::from_xyz(lamp_pos.x, config.pole_height + config.light_radius * 0.5, lamp_pos.y),
                     StreetLamp,
+                    LampFixture,
                 ));
 
                 lamp_count += 1;
@@ -143,4 +148,38 @@ fn spawn_street_lamps(
     }
 
     info!("Spawned {} street lamps", lamp_count);
+}
+
+fn update_lamp_brightness(
+    tod: Res<TimeOfDay>,
+    lamp_query: Query<&MeshMaterial3d<StandardMaterial>, With<LampFixture>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    // Calculate night factor (0 during day, 1 at night)
+    let hour = tod.hour();
+    let night_factor = if hour >= 6.0 && hour <= 7.0 {
+        // Dawn - lamps turning off
+        1.0 - (hour - 6.0)
+    } else if hour >= 18.0 && hour <= 19.0 {
+        // Dusk - lamps turning on
+        hour - 18.0
+    } else if hour > 7.0 && hour < 18.0 {
+        // Day - lamps off (but not completely)
+        0.1
+    } else {
+        // Night - lamps fully on
+        1.0
+    };
+
+    for material_handle in lamp_query.iter() {
+        if let Some(material) = materials.get_mut(&material_handle.0) {
+            // Warm orange glow
+            material.emissive = LinearRgba::new(
+                1.0 * night_factor * 5.0,
+                0.85 * night_factor * 5.0,
+                0.5 * night_factor * 5.0,
+                1.0,
+            );
+        }
+    }
 }

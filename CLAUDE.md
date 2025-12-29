@@ -38,27 +38,58 @@ The city generates in a specific order, controlled by marker resources and run c
 
 1. **TensorFieldPlugin** → Creates `TensorField` resource (grid + radial basis blending)
 2. **RoadGeneratorPlugin** → Traces streamlines through tensor field → `RoadGraph` resource, emits `RoadsGenerated`
-3. **BlockExtractorPlugin** → Grid-based lot extraction from road network → `CityBlocks` resource, emits `BlocksExtracted`
+3. **BlockExtractorPlugin** → Grid-based lot extraction from road network → `CityLots` resource
 4. **RoadMeshPlugin** → Generates road/sidewalk/intersection meshes when `RoadsGenerated` detected
-5. **BuildingSpawnerPlugin** → Spawns buildings and parks on lots when `BlocksExtracted` detected
+5. **BuildingSpawnerPlugin** → Spawns buildings and parks on lots when `CityLots` populated
 6. **Street furniture** → Street lamps, traffic lights spawn after road meshes exist
+
+### Generation Flow Control
+
+The pipeline uses marker resources and `run_if` conditions to sequence generation:
+
+```rust
+// Event triggers initial generation
+GenerateRoadsEvent → generate_roads_on_event → sets RoadsGenerated(true)
+
+// Run conditions check markers
+extract_blocks.run_if(should_extract_blocks)  // runs when RoadsGenerated.0 && !CityBlocks.extracted
+spawn_buildings.run_if(should_spawn_buildings) // runs when !CityLots.lots.is_empty() && !BuildingsSpawned.0
+```
 
 ### Key Resources
 
 ```rust
 TensorField       // Blended basis fields for road direction sampling
 RoadGraph         // petgraph-based graph with RoadNode/RoadEdge
-CityBlocks        // Collection of buildable lots between roads
-RoadsGenerated    // Marker resource signaling road generation complete
-BlocksExtracted   // Marker resource signaling lots are ready
+CityLots          // Buildable lots extracted from grid (Vec<Lot>)
+RoadsGenerated    // Marker resource (bool) signaling roads complete
+BuildingsSpawned  // Marker resource (bool) signaling buildings spawned
 ```
 
-### Rendering Components
+### Rendering Sub-Plugins
 
-- `RoadMesh`, `SidewalkMesh`, `IntersectionMesh` - Road geometry markers
-- `BuildingMesh` - Building entity with shape/zone info
-- `ParkMarker`, `TreeMarker` - Green space entities
-- `StreetLamp`, `TrafficLight` - Street furniture
+The `RenderPlugin` composes multiple sub-plugins:
+- **DayNightPlugin** - Lighting with sun direction (time-based when implemented)
+- **InstancingPlugin** - Custom material for GPU instancing (disabled by default)
+- **RoadMeshPlugin** - Road/sidewalk/intersection geometry
+- **RoadMarkingsPlugin** - Lane lines and road markings
+- **BuildingSpawnerPlugin** - Building meshes with zone-based styling
+- **StreetLampsPlugin**, **TrafficLightsPlugin** - Street furniture
+- **CrosswalksPlugin**, **ParkedCarsPlugin**, **StreetFurniturePlugin**, **WindowLightsPlugin** - Details
+
+### Entity Components
+
+- `Building` - Building entity with lot_index and BuildingType (Residential/Commercial/Industrial)
+- `Park`, `Tree` - Green space markers
+- `StreetLamp`, `TrafficLight` - Infrastructure markers
+
+### Building Shapes
+
+Buildings spawn with varied shapes based on zone type:
+- **Box** - Simple rectangular prism (all zones)
+- **LShape** - Two overlapping wings (larger lots)
+- **TowerOnBase** - Podium with setback tower (commercial)
+- **Stepped** - Multiple tiers with decreasing footprint (commercial/residential)
 
 ## Architectural Constraints
 

@@ -39,13 +39,13 @@ pub struct TrafficLightConfig {
 impl Default for TrafficLightConfig {
     fn default() -> Self {
         Self {
-            pole_height: 4.5,
-            pole_radius: 0.1,
-            box_width: 0.5,
-            box_height: 1.2,
-            box_depth: 0.4,
-            light_radius: 0.12,
-            offset_from_center: 6.0,
+            pole_height: 5.5,     // ~5.5m pole (realistic)
+            pole_radius: 0.12,
+            box_width: 0.6,
+            box_height: 1.4,      // Traffic signal housing
+            box_depth: 0.5,
+            light_radius: 0.15,
+            offset_from_center: 7.0,
         }
     }
 }

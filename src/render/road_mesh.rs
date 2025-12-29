@@ -4,10 +4,12 @@
 
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
+use noise::{NoiseFn, Perlin};
 use petgraph::graph::NodeIndex;
 
 use crate::procgen::road_generator::RoadsGenerated;
 use crate::procgen::roads::{RoadGraph, RoadType};
+use crate::render::instancing::TerrainConfig;
 
 pub struct RoadMeshPlugin;
 
@@ -72,10 +74,14 @@ fn generate_road_meshes(
     mut commands: Commands,
     road_graph: Res<RoadGraph>,
     config: Res<RoadMeshConfig>,
+    terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     info!("Generating road meshes...");
+
+    // Create terrain sampler with same seed as terrain
+    let terrain = TerrainSampler::new(&terrain_config);
 
     // Road surface material
     let road_material = materials.add(StandardMaterial {
@@ -104,7 +110,7 @@ fn generate_road_meshes(
             RoadType::Alley => config.alley_width,
         };
 
-        let mesh = create_road_strip_mesh(&edge.points, width, config.road_height);
+        let mesh = create_road_strip_mesh(&edge.points, width, config.road_height, &terrain);
 
         commands.spawn((
             Mesh3d(meshes.add(mesh)),
@@ -121,7 +127,7 @@ fn generate_road_meshes(
 
             // Left sidewalk
             let left_points = offset_polyline(&edge.points, sidewalk_offset);
-            let left_mesh = create_road_strip_mesh(&left_points, config.sidewalk_width, config.road_height + 0.05);
+            let left_mesh = create_road_strip_mesh(&left_points, config.sidewalk_width, config.road_height + 0.05, &terrain);
             commands.spawn((
                 Mesh3d(meshes.add(left_mesh)),
                 MeshMaterial3d(sidewalk_material.clone()),
@@ -131,7 +137,7 @@ fn generate_road_meshes(
 
             // Right sidewalk
             let right_points = offset_polyline(&edge.points, -sidewalk_offset);
-            let right_mesh = create_road_strip_mesh(&right_points, config.sidewalk_width, config.road_height + 0.05);
+            let right_mesh = create_road_strip_mesh(&right_points, config.sidewalk_width, config.road_height + 0.05, &terrain);
             commands.spawn((
                 Mesh3d(meshes.add(right_mesh)),
                 MeshMaterial3d(sidewalk_material.clone()),
@@ -166,6 +172,7 @@ fn generate_road_meshes(
                 node.position,
                 &road_directions,
                 config.road_height,
+                &terrain,
             );
 
             commands.spawn((
@@ -181,6 +188,44 @@ fn generate_road_meshes(
     commands.spawn(RoadMeshGenerated);
 
     info!("Road meshes generated");
+}
+
+/// Helper struct for sampling terrain height.
+struct TerrainSampler {
+    perlin: Perlin,
+    noise_scale: f32,
+    height_scale: f32,
+    octaves: u32,
+}
+
+impl TerrainSampler {
+    fn new(config: &TerrainConfig) -> Self {
+        Self {
+            perlin: Perlin::new(config.seed),
+            noise_scale: config.noise_scale,
+            height_scale: config.height_scale,
+            octaves: config.octaves,
+        }
+    }
+
+    /// Sample terrain height at world position (x, z).
+    fn sample(&self, x: f32, z: f32) -> f32 {
+        let mut height = 0.0;
+        let mut amplitude = 1.0;
+        let mut frequency = self.noise_scale;
+        let mut max_amplitude = 0.0;
+
+        for _ in 0..self.octaves {
+            let sample_x = x as f64 * frequency as f64;
+            let sample_z = z as f64 * frequency as f64;
+            height += self.perlin.get([sample_x, sample_z]) as f32 * amplitude;
+            max_amplitude += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2.0;
+        }
+
+        (height / max_amplitude) * self.height_scale
+    }
 }
 
 /// Get the road width for an edge connecting two nodes.
@@ -208,7 +253,8 @@ fn get_road_width_at_node(
 fn create_intersection_mesh(
     center: Vec2,
     road_directions: &[(Vec2, f32)],
-    height: f32,
+    height_offset: f32,
+    terrain: &TerrainSampler,
 ) -> Mesh {
     let mut vertices: Vec<[f32; 3]> = Vec::new();
     let mut normals: Vec<[f32; 3]> = Vec::new();
@@ -237,14 +283,16 @@ fn create_intersection_mesh(
         angle_a.partial_cmp(&angle_b).unwrap()
     });
 
-    // Add center vertex
-    vertices.push([center.x, height + 0.02, center.y]);
+    // Add center vertex with terrain height
+    let center_height = terrain.sample(center.x, center.y) + height_offset + 0.02;
+    vertices.push([center.x, center_height, center.y]);
     normals.push([0.0, 1.0, 0.0]);
     uvs.push([0.5, 0.5]);
 
-    // Add corner vertices
+    // Add corner vertices with terrain height
     for point in &corner_points {
-        vertices.push([point.x, height + 0.02, point.y]);
+        let point_height = terrain.sample(point.x, point.y) + height_offset + 0.02;
+        vertices.push([point.x, point_height, point.y]);
         normals.push([0.0, 1.0, 0.0]);
 
         let uv_x = (point.x - center.x) / 20.0 + 0.5;
@@ -270,7 +318,7 @@ fn create_intersection_mesh(
 }
 
 /// Create a quad strip mesh for a road segment.
-fn create_road_strip_mesh(points: &[Vec2], width: f32, height: f32) -> Mesh {
+fn create_road_strip_mesh(points: &[Vec2], width: f32, height_offset: f32, terrain: &TerrainSampler) -> Mesh {
     let half_width = width / 2.0;
     let mut vertices: Vec<[f32; 3]> = Vec::new();
     let mut normals: Vec<[f32; 3]> = Vec::new();
@@ -300,8 +348,12 @@ fn create_road_strip_mesh(points: &[Vec2], width: f32, height: f32) -> Mesh {
         let left = current + perp * half_width;
         let right = current - perp * half_width;
 
-        vertices.push([left.x, height, left.y]);
-        vertices.push([right.x, height, right.y]);
+        // Sample terrain height at each vertex
+        let left_height = terrain.sample(left.x, left.y) + height_offset;
+        let right_height = terrain.sample(right.x, right.y) + height_offset;
+
+        vertices.push([left.x, left_height, left.y]);
+        vertices.push([right.x, right_height, right.y]);
 
         normals.push([0.0, 1.0, 0.0]);
         normals.push([0.0, 1.0, 0.0]);

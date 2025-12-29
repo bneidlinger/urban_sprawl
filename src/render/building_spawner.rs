@@ -1,11 +1,13 @@
 //! Building spawner that generates varied buildings on city lots.
 
 use bevy::prelude::*;
+use noise::{NoiseFn, Perlin};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 use crate::procgen::block_extractor::CityLots;
 use crate::procgen::parcels::Lot;
+use crate::render::instancing::TerrainConfig;
 
 pub struct BuildingSpawnerPlugin;
 
@@ -61,10 +63,10 @@ pub struct BuildingConfig {
 impl Default for BuildingConfig {
     fn default() -> Self {
         Self {
-            min_height: 4.0,
-            max_height_residential: 15.0,
-            max_height_commercial: 40.0,
-            max_height_industrial: 20.0,
+            min_height: 6.0,              // 2-floor minimum (~3m per floor)
+            max_height_residential: 18.0, // Up to 6 floors
+            max_height_commercial: 60.0,  // Up to 20 floors downtown
+            max_height_industrial: 15.0,  // Lower industrial buildings
             setback: 2.0,
             seed: 42,
         }
@@ -75,12 +77,14 @@ fn spawn_buildings(
     mut commands: Commands,
     lots: Res<CityLots>,
     config: Res<BuildingConfig>,
+    terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawned: ResMut<BuildingsSpawned>,
 ) {
     info!("Spawning {} buildings...", lots.lots.len());
 
+    let terrain = TerrainSampler::new(&terrain_config);
     let mut rng = StdRng::seed_from_u64(config.seed);
 
     // Material palettes
@@ -126,7 +130,7 @@ fn spawn_buildings(
     .map(|&c| materials.add(StandardMaterial { base_color: c, perceptual_roughness: 0.85, ..default() }))
     .collect();
 
-    let trunk_mesh = meshes.add(Cylinder::new(0.2, 1.0));
+    let trunk_mesh = meshes.add(Cylinder::new(0.3, 1.0));
     let foliage_mesh = meshes.add(Sphere::new(1.0));
 
     for (lot_index, lot) in lots.lots.iter().enumerate() {
@@ -155,7 +159,8 @@ fn spawn_buildings(
         // 8% chance to be a park (more likely away from downtown)
         let park_chance = if dist_from_center > 150.0 { 0.10 } else { 0.04 };
         if rng.gen::<f32>() < park_chance && size.x > 6.0 && size.y > 6.0 {
-            spawn_park(&mut commands, &mut meshes, &grass_material, &trunk_material, &trunk_mesh, &foliage_materials, &foliage_mesh, center, size, &mut rng);
+            let park_terrain = terrain.sample(center.x, center.y);
+            spawn_park(&mut commands, &mut meshes, &grass_material, &trunk_material, &trunk_mesh, &foliage_materials, &foliage_mesh, center, size, park_terrain, &mut rng);
             continue;
         }
 
@@ -200,19 +205,22 @@ fn spawn_buildings(
             ..default()
         });
 
+        // Sample terrain height at building center
+        let terrain_height = terrain.sample(center.x, center.y);
+
         // Spawn building based on shape
         match shape {
             BuildingShape::Box => {
-                spawn_box_building(&mut commands, &mut meshes, material, center, size, height, lot_index, building_type);
+                spawn_box_building(&mut commands, &mut meshes, material, center, size, height, terrain_height, lot_index, building_type);
             }
             BuildingShape::LShape => {
-                spawn_l_building(&mut commands, &mut meshes, material, center, size, height, &mut rng, lot_index, building_type);
+                spawn_l_building(&mut commands, &mut meshes, material, center, size, height, terrain_height, &mut rng, lot_index, building_type);
             }
             BuildingShape::TowerOnBase => {
-                spawn_tower_building(&mut commands, &mut meshes, &mut materials, material, center, size, height, &mut rng, lot_index, building_type);
+                spawn_tower_building(&mut commands, &mut meshes, &mut materials, material, center, size, height, terrain_height, &mut rng, lot_index, building_type);
             }
             BuildingShape::Stepped => {
-                spawn_stepped_building(&mut commands, &mut meshes, material, center, size, height, &mut rng, lot_index, building_type);
+                spawn_stepped_building(&mut commands, &mut meshes, material, center, size, height, terrain_height, &mut rng, lot_index, building_type);
             }
         }
     }
@@ -262,6 +270,7 @@ fn spawn_box_building(
     center: Vec2,
     size: Vec2,
     height: f32,
+    terrain_height: f32,
     lot_index: usize,
     building_type: BuildingType,
 ) {
@@ -269,7 +278,7 @@ fn spawn_box_building(
     commands.spawn((
         Mesh3d(mesh),
         MeshMaterial3d(material),
-        Transform::from_xyz(center.x, height / 2.0, center.y),
+        Transform::from_xyz(center.x, terrain_height + height / 2.0, center.y),
         Building { lot_index, building_type },
     ));
 }
@@ -281,6 +290,7 @@ fn spawn_l_building(
     center: Vec2,
     size: Vec2,
     height: f32,
+    terrain_height: f32,
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingType,
@@ -296,7 +306,7 @@ fn spawn_l_building(
     commands.spawn((
         Mesh3d(main_mesh),
         MeshMaterial3d(material.clone()),
-        Transform::from_xyz(center.x + main_offset.x, height / 2.0, center.y + main_offset.y),
+        Transform::from_xyz(center.x + main_offset.x, terrain_height + height / 2.0, center.y + main_offset.y),
         Building { lot_index, building_type },
     ));
 
@@ -315,7 +325,7 @@ fn spawn_l_building(
     commands.spawn((
         Mesh3d(side_mesh),
         MeshMaterial3d(material),
-        Transform::from_xyz(side_x, height / 2.0, side_z),
+        Transform::from_xyz(side_x, terrain_height + height / 2.0, side_z),
         Building { lot_index, building_type },
     ));
 }
@@ -328,6 +338,7 @@ fn spawn_tower_building(
     center: Vec2,
     size: Vec2,
     height: f32,
+    terrain_height: f32,
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingType,
@@ -339,7 +350,7 @@ fn spawn_tower_building(
     commands.spawn((
         Mesh3d(base_mesh),
         MeshMaterial3d(material.clone()),
-        Transform::from_xyz(center.x, base_height / 2.0, center.y),
+        Transform::from_xyz(center.x, terrain_height + base_height / 2.0, center.y),
         Building { lot_index, building_type },
     ));
 
@@ -362,7 +373,7 @@ fn spawn_tower_building(
         commands.spawn((
             Mesh3d(tower_mesh),
             MeshMaterial3d(tower_material),
-            Transform::from_xyz(center.x, base_height + tower_height / 2.0, center.y),
+            Transform::from_xyz(center.x, terrain_height + base_height + tower_height / 2.0, center.y),
             Building { lot_index, building_type },
         ));
     }
@@ -375,6 +386,7 @@ fn spawn_stepped_building(
     center: Vec2,
     size: Vec2,
     height: f32,
+    terrain_height: f32,
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingType,
@@ -385,7 +397,7 @@ fn spawn_stepped_building(
     for i in 0..num_steps {
         let shrink = 1.0 - (i as f32 * 0.15);
         let step_size = size * shrink;
-        let y = step_height * i as f32 + step_height / 2.0;
+        let y = terrain_height + step_height * i as f32 + step_height / 2.0;
 
         let step_mesh = meshes.add(Cuboid::new(step_size.x, step_height, step_size.y));
 
@@ -447,6 +459,7 @@ fn spawn_park(
     foliage_mesh: &Handle<Mesh>,
     center: Vec2,
     size: Vec2,
+    terrain_height: f32,
     rng: &mut StdRng,
 ) {
     // Grass ground
@@ -454,7 +467,7 @@ fn spawn_park(
     commands.spawn((
         Mesh3d(grass_mesh),
         MeshMaterial3d(grass_material.clone()),
-        Transform::from_xyz(center.x, 0.075, center.y),
+        Transform::from_xyz(center.x, terrain_height + 0.075, center.y),
         Park,
     ));
 
@@ -464,14 +477,15 @@ fn spawn_park(
         let tree_x = center.x + rng.gen_range(-size.x / 3.0..size.x / 3.0);
         let tree_z = center.y + rng.gen_range(-size.y / 3.0..size.y / 3.0);
 
-        let tree_height = 2.0 + rng.gen::<f32>() * 2.0;
-        let foliage_size = 1.0 + rng.gen::<f32>() * 0.6;
+        // Realistic tree height: 6-12m
+        let tree_height = 6.0 + rng.gen::<f32>() * 6.0;
+        let foliage_size = 2.5 + rng.gen::<f32>() * 1.5;
 
         // Trunk
         commands.spawn((
             Mesh3d(trunk_mesh.clone()),
             MeshMaterial3d(trunk_material.clone()),
-            Transform::from_xyz(tree_x, tree_height / 2.0, tree_z)
+            Transform::from_xyz(tree_x, terrain_height + tree_height / 2.0, tree_z)
                 .with_scale(Vec3::new(1.0, tree_height, 1.0)),
             Tree,
         ));
@@ -481,9 +495,46 @@ fn spawn_park(
         commands.spawn((
             Mesh3d(foliage_mesh.clone()),
             MeshMaterial3d(foliage_mat),
-            Transform::from_xyz(tree_x, tree_height + foliage_size * 0.3, tree_z)
+            Transform::from_xyz(tree_x, terrain_height + tree_height + foliage_size * 0.3, tree_z)
                 .with_scale(Vec3::splat(foliage_size)),
             Tree,
         ));
+    }
+}
+
+/// Helper struct for sampling terrain height.
+struct TerrainSampler {
+    perlin: Perlin,
+    noise_scale: f32,
+    height_scale: f32,
+    octaves: u32,
+}
+
+impl TerrainSampler {
+    fn new(config: &TerrainConfig) -> Self {
+        Self {
+            perlin: Perlin::new(config.seed),
+            noise_scale: config.noise_scale,
+            height_scale: config.height_scale,
+            octaves: config.octaves,
+        }
+    }
+
+    fn sample(&self, x: f32, z: f32) -> f32 {
+        let mut height = 0.0;
+        let mut amplitude = 1.0;
+        let mut frequency = self.noise_scale;
+        let mut max_amplitude = 0.0;
+
+        for _ in 0..self.octaves {
+            let sample_x = x as f64 * frequency as f64;
+            let sample_z = z as f64 * frequency as f64;
+            height += self.perlin.get([sample_x, sample_z]) as f32 * amplitude;
+            max_amplitude += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2.0;
+        }
+
+        (height / max_amplitude) * self.height_scale
     }
 }

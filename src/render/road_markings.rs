@@ -2,9 +2,10 @@
 
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
+use noise::{NoiseFn, Perlin};
 
-use crate::procgen::road_generator::RoadsGenerated;
 use crate::procgen::roads::{RoadGraph, RoadType};
+use crate::render::instancing::TerrainConfig;
 use crate::render::road_mesh::RoadMeshGenerated;
 
 pub struct RoadMarkingsPlugin;
@@ -52,10 +53,14 @@ fn generate_road_markings(
     mut commands: Commands,
     road_graph: Res<RoadGraph>,
     config: Res<MarkingsConfig>,
+    terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     info!("Generating road markings...");
+
+    // Create terrain sampler
+    let terrain = TerrainSampler::new(&terrain_config);
 
     // Yellow center line material
     let center_line_material = materials.add(StandardMaterial {
@@ -92,6 +97,7 @@ fn generate_road_markings(
                 config.dash_length,
                 config.gap_length,
                 config.marking_height,
+                &terrain,
             );
 
             for dash_mesh in dashes {
@@ -121,6 +127,7 @@ fn generate_road_markings(
                 config.dash_length * 2.0, // Longer dashes for edges
                 config.gap_length,
                 config.marking_height,
+                &terrain,
             );
 
             for dash_mesh in left_dashes {
@@ -140,6 +147,7 @@ fn generate_road_markings(
                 config.dash_length * 2.0,
                 config.gap_length,
                 config.marking_height,
+                &terrain,
             );
 
             for dash_mesh in right_dashes {
@@ -162,7 +170,8 @@ fn create_dashed_line(
     width: f32,
     dash_length: f32,
     gap_length: f32,
-    height: f32,
+    height_offset: f32,
+    terrain: &TerrainSampler,
 ) -> Vec<Mesh> {
     let mut meshes = Vec::new();
     let cycle_length = dash_length + gap_length;
@@ -191,7 +200,7 @@ fn create_dashed_line(
                 point_at_distance(&segments, dash_start),
                 point_at_distance(&segments, dash_end),
             ) {
-                let mesh = create_dash_quad(start_pos, end_pos, width, height);
+                let mesh = create_dash_quad(start_pos, end_pos, width, height_offset, terrain);
                 meshes.push(mesh);
             }
         }
@@ -217,7 +226,7 @@ fn point_at_distance(segments: &[(Vec2, Vec2, f32)], distance: f32) -> Option<Ve
 }
 
 /// Create a single dash quad.
-fn create_dash_quad(start: Vec2, end: Vec2, width: f32, height: f32) -> Mesh {
+fn create_dash_quad(start: Vec2, end: Vec2, width: f32, height_offset: f32, terrain: &TerrainSampler) -> Mesh {
     let dir = (end - start).normalize_or_zero();
     let perp = Vec2::new(-dir.y, dir.x);
     let half_width = width / 2.0;
@@ -227,11 +236,17 @@ fn create_dash_quad(start: Vec2, end: Vec2, width: f32, height: f32) -> Mesh {
     let v2 = end + perp * half_width;
     let v3 = end - perp * half_width;
 
+    // Sample terrain height at each vertex
+    let h0 = terrain.sample(v0.x, v0.y) + height_offset;
+    let h1 = terrain.sample(v1.x, v1.y) + height_offset;
+    let h2 = terrain.sample(v2.x, v2.y) + height_offset;
+    let h3 = terrain.sample(v3.x, v3.y) + height_offset;
+
     let vertices = vec![
-        [v0.x, height, v0.y],
-        [v1.x, height, v1.y],
-        [v2.x, height, v2.y],
-        [v3.x, height, v3.y],
+        [v0.x, h0, v0.y],
+        [v1.x, h1, v1.y],
+        [v2.x, h2, v2.y],
+        [v3.x, h3, v3.y],
     ];
 
     let normals = vec![
@@ -278,4 +293,41 @@ fn offset_polyline(points: &[Vec2], offset: f32) -> Vec<Vec2> {
             point + perp * offset
         })
         .collect()
+}
+
+/// Helper struct for sampling terrain height.
+struct TerrainSampler {
+    perlin: Perlin,
+    noise_scale: f32,
+    height_scale: f32,
+    octaves: u32,
+}
+
+impl TerrainSampler {
+    fn new(config: &TerrainConfig) -> Self {
+        Self {
+            perlin: Perlin::new(config.seed),
+            noise_scale: config.noise_scale,
+            height_scale: config.height_scale,
+            octaves: config.octaves,
+        }
+    }
+
+    fn sample(&self, x: f32, z: f32) -> f32 {
+        let mut height = 0.0;
+        let mut amplitude = 1.0;
+        let mut frequency = self.noise_scale;
+        let mut max_amplitude = 0.0;
+
+        for _ in 0..self.octaves {
+            let sample_x = x as f64 * frequency as f64;
+            let sample_z = z as f64 * frequency as f64;
+            height += self.perlin.get([sample_x, sample_z]) as f32 * amplitude;
+            max_amplitude += amplitude;
+            amplitude *= 0.5;
+            frequency *= 2.0;
+        }
+
+        (height / max_amplitude) * self.height_scale
+    }
 }

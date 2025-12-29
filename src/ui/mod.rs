@@ -5,6 +5,8 @@ use bevy::{
     prelude::*,
 };
 
+use crate::render::day_night::TimeOfDay;
+
 pub mod debug_render;
 
 pub struct UiPlugin;
@@ -15,7 +17,7 @@ impl Plugin for UiPlugin {
             .add_plugins(debug_render::DebugRenderPlugin)
             .init_resource::<DebugConfig>()
             .add_systems(Startup, setup_fps_counter)
-            .add_systems(Update, (update_fps_counter, toggle_debug_views));
+            .add_systems(Update, (update_fps_counter, update_time_display, toggle_debug_views));
     }
 }
 
@@ -45,6 +47,10 @@ impl Default for DebugConfig {
 #[derive(Component)]
 struct FpsText;
 
+/// Marker for time display text.
+#[derive(Component)]
+struct TimeText;
+
 /// Marker for debug info text.
 #[derive(Component)]
 struct DebugInfoText;
@@ -67,9 +73,26 @@ fn setup_fps_counter(mut commands: Commands) {
         FpsText,
     ));
 
+    // Time display in top-right
+    commands.spawn((
+        Text::new("12:00"),
+        TextFont {
+            font_size: 28.0,
+            ..default()
+        },
+        TextColor(Color::WHITE),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(10.0),
+            right: Val::Px(10.0),
+            ..default()
+        },
+        TimeText,
+    ));
+
     // Debug toggle info
     commands.spawn((
-        Text::new("[T] Tensor Field  [R] Roads"),
+        Text::new("[T] Tensor  [R] Roads  [P] Pause Time  [1-4] Time Presets"),
         TextFont {
             font_size: 16.0,
             ..default()
@@ -86,7 +109,7 @@ fn setup_fps_counter(mut commands: Commands) {
 
     // Controls hint
     commands.spawn((
-        Text::new("WASD: Pan | Scroll: Zoom | Q/E: Rotate"),
+        Text::new("WASD: Pan | Scroll: Zoom | Q/E: Rotate | [/]: Time Speed"),
         TextFont {
             font_size: 16.0,
             ..default()
@@ -116,6 +139,55 @@ fn update_fps_counter(
                 **text = format!("FPS: {:.0}", value);
             }
         }
+    }
+}
+
+fn update_time_display(
+    tod: Res<TimeOfDay>,
+    mut query: Query<(&mut Text, &mut TextColor), With<TimeText>>,
+) {
+    let hour = tod.hour();
+    let hours = hour as u32;
+    let minutes = ((hour.fract()) * 60.0) as u32;
+
+    // Format as 12-hour time
+    let (display_hour, ampm) = if hours == 0 {
+        (12, "AM")
+    } else if hours < 12 {
+        (hours, "AM")
+    } else if hours == 12 {
+        (12, "PM")
+    } else {
+        (hours - 12, "PM")
+    };
+
+    // Time period indicator
+    let period = if hour >= 5.0 && hour < 7.0 {
+        "Dawn"
+    } else if hour >= 7.0 && hour < 12.0 {
+        "Morning"
+    } else if hour >= 12.0 && hour < 17.0 {
+        "Afternoon"
+    } else if hour >= 17.0 && hour < 20.0 {
+        "Evening"
+    } else {
+        "Night"
+    };
+
+    for (mut text, mut color) in &mut query {
+        let pause_indicator = if tod.paused { " [PAUSED]" } else { "" };
+        **text = format!("{}:{:02} {} - {}{}", display_hour, minutes, ampm, period, pause_indicator);
+
+        // Color based on time of day
+        color.0 = if tod.is_night() {
+            Color::srgb(0.7, 0.8, 1.0) // Cool blue at night
+        } else if hour >= 5.0 && hour < 8.0 {
+            Color::srgb(1.0, 0.8, 0.6) // Warm orange at dawn
+        } else if hour >= 17.0 && hour < 20.0 {
+            Color::srgb(1.0, 0.7, 0.5) // Warm orange at dusk
+        } else {
+            Color::WHITE // White during day
+        };
     }
 }
 
