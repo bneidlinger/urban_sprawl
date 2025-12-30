@@ -8,8 +8,10 @@
 use bevy::prelude::*;
 
 pub mod block_extractor;
+pub mod building_factory;
 pub mod buildings;
 pub mod lot_engine;
+pub mod lot_geometry;
 pub mod parcels;
 pub mod road_generator;
 pub mod roads;
@@ -25,6 +27,7 @@ impl Plugin for ProcgenPlugin {
             .add_plugins(roads::RoadsPlugin)
             .add_plugins(road_generator::RoadGeneratorPlugin)
             .add_plugins(block_extractor::BlockExtractorPlugin)
-            .add_plugins(lot_engine::LotEnginePlugin);
+            .add_plugins(lot_engine::LotEnginePlugin)
+            .add_plugins(building_factory::BuildingFactoryPlugin);
     }
 }
