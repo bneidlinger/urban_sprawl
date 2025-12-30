@@ -9,12 +9,14 @@ use crate::render::day_night::TimeOfDay;
 use crate::simulation::SimulationConfig;
 
 pub mod debug_render;
+pub mod menu;
 
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(FrameTimeDiagnosticsPlugin::default())
+        app.add_plugins(menu::MenuPlugin)
+            .add_plugins(FrameTimeDiagnosticsPlugin::default())
             .add_plugins(debug_render::DebugRenderPlugin)
             .init_resource::<DebugConfig>()
             .add_systems(Startup, setup_hud)
