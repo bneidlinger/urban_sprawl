@@ -9,6 +9,7 @@ use bevy::prelude::*;
 
 pub mod block_extractor;
 pub mod buildings;
+pub mod lot_engine;
 pub mod parcels;
 pub mod road_generator;
 pub mod roads;
@@ -23,6 +24,7 @@ impl Plugin for ProcgenPlugin {
         app.add_plugins(tensor::TensorFieldPlugin)
             .add_plugins(roads::RoadsPlugin)
             .add_plugins(road_generator::RoadGeneratorPlugin)
-            .add_plugins(block_extractor::BlockExtractorPlugin);
+            .add_plugins(block_extractor::BlockExtractorPlugin)
+            .add_plugins(lot_engine::LotEnginePlugin);
     }
 }
