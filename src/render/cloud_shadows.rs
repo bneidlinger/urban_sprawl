@@ -114,7 +114,11 @@ fn spawn_cloud_shadow_plane(
     config: Res<CloudShadowConfig>,
 ) {
     // Create a large plane mesh
-    let plane_mesh = meshes.add(Plane3d::default().mesh().size(config.plane_size, config.plane_size));
+    let plane_mesh = meshes.add(
+        Plane3d::default()
+            .mesh()
+            .size(config.plane_size, config.plane_size),
+    );
 
     // Create the cloud shadow material
     let material = materials.add(CloudShadowMaterial {
@@ -134,7 +138,10 @@ fn spawn_cloud_shadow_plane(
         CloudShadowPlane,
     ));
 
-    info!("Cloud shadow plane spawned at height {}", config.plane_height);
+    info!(
+        "Cloud shadow plane spawned at height {}",
+        config.plane_height
+    );
 }
 
 fn update_cloud_shadows(
@@ -145,8 +152,15 @@ fn update_cloud_shadows(
     mut materials: ResMut<Assets<CloudShadowMaterial>>,
     query: Query<&MeshMaterial3d<CloudShadowMaterial>, With<CloudShadowPlane>>,
 ) {
-    // Update scroll offset based on wind
+    // Update scroll offset based on wind and wrap periodically to avoid precision loss
     scroll_state.offset += config.wind_direction * config.wind_speed * time.delta_secs();
+
+    // Keep the offset bounded so very long sessions don't accumulate huge UV values
+    let wrap_distance = config.plane_size * 4.0;
+    scroll_state.offset = Vec2::new(
+        scroll_state.offset.x.rem_euclid(wrap_distance),
+        scroll_state.offset.y.rem_euclid(wrap_distance),
+    );
 
     // Calculate opacity based on time of day (fade out at night)
     let day_factor = time_of_day.transition_factor();

@@ -113,7 +113,9 @@ fn plan_open_space_lots(
     info!("Planning zoning and growth targets for open lots");
 
     let mut rng = StdRng::seed_from_u64(config.seed);
-    let perlin = Perlin::new(config.seed);
+    // Perlin expects a u32 seed; fold the configured seed into the expected width for deterministic noise
+    let perlin_seed = config.seed as u32;
+    let perlin = Perlin::new(perlin_seed);
     let road_points = collect_road_points(&road_graph, 3.0);
 
     let mut annotated = Vec::new();

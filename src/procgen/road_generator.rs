@@ -8,9 +8,9 @@
 use bevy::prelude::*;
 use smallvec::SmallVec;
 
-use super::roads::{RoadEdge, RoadGraph, RoadNodeType, RoadType};
+use super::roads::{RoadGraph, RoadNodeType, RoadType};
 use super::streamline::{generate_seeds, Streamline, StreamlineConfig, StreamlineIntegrator};
-use super::tensor::{BasisField, TensorField};
+use super::tensor::TensorField;
 
 /// Configuration for road generation.
 #[derive(Resource, Clone)]
@@ -186,9 +186,16 @@ fn add_streamline_to_graph(
     let mut segment_points: SmallVec<[Vec2; 8]> = SmallVec::new();
     segment_points.push(start_pos);
 
+    // Track segment length incrementally to avoid repeated scans of the point list
+    let mut segment_length = 0.0;
+
     // Process each point
     for point in streamline.points.iter().skip(1) {
         let pos = point.position;
+        // Extend the current segment and track its length incrementally
+        if let Some(last) = segment_points.last() {
+            segment_length += last.distance(pos);
+        }
         segment_points.push(pos);
 
         // Check if we should create an intersection (near existing node)
@@ -199,15 +206,11 @@ fn add_streamline_to_graph(
                 prev_node = existing;
                 segment_points.clear();
                 segment_points.push(pos);
+                segment_length = 0.0;
             }
         }
 
         // Check segment length - create intermediate nodes for long segments
-        let segment_length: f32 = segment_points
-            .windows(2)
-            .map(|w| w[0].distance(w[1]))
-            .sum();
-
         if segment_length > config.streamline.separation * 3.0 {
             // Create intermediate node
             let new_node = graph.add_node(pos, RoadNodeType::Intersection);
@@ -215,6 +218,7 @@ fn add_streamline_to_graph(
             prev_node = new_node;
             segment_points.clear();
             segment_points.push(pos);
+            segment_length = 0.0;
         }
     }
 
