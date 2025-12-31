@@ -2,6 +2,8 @@
 //!
 //! All agents heading to the same destination share a single flow field.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;

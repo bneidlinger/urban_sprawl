@@ -130,7 +130,7 @@ fn spawn_crosswalks(
 }
 
 /// Create a crosswalk mesh with parallel stripes.
-fn create_crosswalk_mesh(config: &CrosswalkConfig, road_width: f32) -> Mesh {
+fn create_crosswalk_mesh(config: &CrosswalkConfig, _road_width: f32) -> Mesh {
     let mut vertices: Vec<[f32; 3]> = Vec::new();
     let mut normals: Vec<[f32; 3]> = Vec::new();
     let mut uvs: Vec<[f32; 2]> = Vec::new();

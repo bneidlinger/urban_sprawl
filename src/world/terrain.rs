@@ -1,5 +1,7 @@
 //! Terrain generation and height maps.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 

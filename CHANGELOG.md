@@ -5,6 +5,22 @@ All notable changes to IsoCitySim will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **Pedestrians** - Walking pedestrians on sidewalks
+  - 50 pedestrians spawned at road nodes, walking at ~1.4 m/s
+  - Sidewalk offset calculation using perpendicular road direction
+  - Varied clothing colors (8 options) and skin tones (5 options)
+  - Random wandering between intersections on Major/Minor roads
+- **Moving Vehicles** - Cars driving on the road network
+  - 25 vehicles traversing road edges with waypoint-based navigation
+  - Speed varies by road type (Highway 1.5x, Major 1.0x, Minor 0.8x)
+  - Traffic light awareness - vehicles stop at red/yellow lights
+  - Random edge selection at intersections
+- **Street Trees** - Trees lining sidewalks on Major and Minor roads
+  - 25m spacing, alternating sides of street
+  - Varied heights (5-10m) and foliage sizes (2-3.5m)
+  - Three foliage color variations
+  - Terrain-following placement
+- **Mouse Panning** - Camera pan with middle/right mouse button drag
 - **Cloud Shadows** - Drifting cloud shadows using procedural 5-octave FBM noise
   - Custom WGSL shader (`assets/shaders/cloud_shadows.wgsl`)
   - Configurable wind direction, speed, coverage, and opacity

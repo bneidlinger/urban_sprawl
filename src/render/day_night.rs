@@ -1,7 +1,7 @@
 //! Day/night cycle with sun animation and atmospheric changes.
 
 use bevy::{
-    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, FogFalloff, FogSettings},
+    pbr::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, DistanceFog, FogFalloff},
     prelude::*,
 };
 
@@ -371,7 +371,7 @@ fn update_sky_color(
 fn update_fog(
     tod: Res<TimeOfDay>,
     config: Res<DayNightConfig>,
-    mut fog_query: Query<&mut FogSettings, With<Camera3d>>,
+    mut fog_query: Query<&mut DistanceFog, With<Camera3d>>,
 ) {
     let hour = tod.hour();
     let (color, density) = fog_profile(hour, &config);

@@ -1,9 +1,12 @@
 //! Simulation systems for citizens, vehicles, and traffic.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 pub mod citizens;
 pub mod flow_field;
+pub mod pedestrians;
 pub mod traffic;
 pub mod vehicle_traffic;
 pub mod vehicles;
@@ -13,6 +16,7 @@ pub struct SimulationPlugin;
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(vehicle_traffic::MovingVehiclePlugin)
+            .add_plugins(pedestrians::PedestrianPlugin)
             .init_resource::<SimulationConfig>()
             .add_systems(Update, simulation_tick);
     }

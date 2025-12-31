@@ -2,6 +2,8 @@
 //!
 //! Uses a "turtle" approach to walk through the field following eigenvectors.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 use super::tensor::TensorField;

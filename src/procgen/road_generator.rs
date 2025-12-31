@@ -3,6 +3,7 @@
 //! Creates organic city road layouts by:
 //! 1. Composing a tensor field (radial downtown + grid suburbs)
 //! 2. Tracing streamlines through the field
+#![allow(dead_code)]
 //! 3. Building a graph with snapped intersections
 
 use bevy::prelude::*;

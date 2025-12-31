@@ -1,5 +1,7 @@
 //! Street furniture: fire hydrants, benches, trash cans, etc.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;

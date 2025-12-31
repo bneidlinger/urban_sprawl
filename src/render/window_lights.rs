@@ -1,5 +1,7 @@
 //! Window lights for buildings that illuminate at night.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use bevy::render::mesh::MeshAabb;
 use rand::{Rng, SeedableRng};

@@ -1,6 +1,7 @@
 //! Wave Function Collapse for zoning and land use assignment.
 
-use bevy::prelude::*;
+#![allow(dead_code)]
+
 use rand::Rng;
 use std::collections::HashSet;
 

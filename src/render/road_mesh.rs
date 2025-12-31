@@ -2,6 +2,8 @@
 //!
 //! Converts road edges into renderable quad strips with proper width.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use bevy::render::mesh::{Indices, PrimitiveTopology};
 use noise::{NoiseFn, Perlin};

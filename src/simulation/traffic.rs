@@ -3,6 +3,8 @@
 //! Reference: Nagel, K., & Schreckenberg, M. (1992).
 //! "A cellular automaton model for freeway traffic"
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use rand::Rng;
 

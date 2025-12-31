@@ -1,5 +1,7 @@
 //! Citizen agent system.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 /// Citizen needs (Maslow-lite).

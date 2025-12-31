@@ -1,5 +1,7 @@
 //! Building spawner that generates varied buildings on city lots.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 use rand::rngs::StdRng;

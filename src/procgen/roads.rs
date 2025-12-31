@@ -2,6 +2,8 @@
 //!
 //! Uses petgraph for the underlying graph structure.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use petgraph::graph::{EdgeIndex, NodeIndex, UnGraph};
 use petgraph::visit::EdgeRef;

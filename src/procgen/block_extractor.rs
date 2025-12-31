@@ -2,6 +2,8 @@
 //!
 //! Uses a grid-based approach to find buildable areas between roads.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 use super::parcels::Lot;
@@ -86,7 +88,7 @@ fn extract_blocks(
 
             if min_dist > clearance {
                 // Create a lot at this position
-                let half_cell = cell / 2.0 - 1.0; // Slight gap between lots
+                let _half_cell = cell / 2.0 - 1.0; // Slight gap between lots
                 let vertices = vec![
                     Vec2::new(x + 1.0, y + 1.0),
                     Vec2::new(x + cell - 1.0, y + 1.0),
@@ -127,7 +129,7 @@ fn collect_road_points(graph: &RoadGraph, spacing: f32) -> Vec<Vec2> {
                 continue;
             }
 
-            let step = dir.normalize() * spacing;
+            let _step = dir.normalize() * spacing;
             let steps = (len / spacing).ceil() as usize;
 
             for i in 0..=steps {

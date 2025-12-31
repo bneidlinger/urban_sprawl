@@ -2,6 +2,8 @@
 //!
 //! Reference: Mueller et al. 2006 - "Procedural Modeling of Buildings"
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use rand::Rng;
 

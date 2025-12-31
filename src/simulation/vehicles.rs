@@ -1,5 +1,7 @@
 //! Vehicle movement and lane logic.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use petgraph::graph::{EdgeIndex, NodeIndex};
 

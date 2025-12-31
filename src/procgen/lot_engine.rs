@@ -3,6 +3,7 @@
 //! Consumes the buildable lots discovered between roads and annotates them
 //! with zoning, density, and environmental context. The intent is to provide
 //! a predictable-yet-randomized plan that later systems can use to spawn
+#![allow(dead_code)]
 //! buildings, parks, or civic spaces.
 
 use bevy::prelude::*;
@@ -301,7 +302,7 @@ fn collect_road_points(graph: &RoadGraph, spacing: f32) -> Vec<Vec2> {
                 continue;
             }
 
-            let step = dir.normalize() * spacing;
+            let _step = dir.normalize() * spacing;
             let steps = (len / spacing).ceil() as usize;
 
             for i in 0..=steps {

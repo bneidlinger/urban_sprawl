@@ -13,6 +13,7 @@ pub mod road_markings;
 pub mod road_mesh;
 pub mod street_furniture;
 pub mod street_lamps;
+pub mod street_trees;
 pub mod traffic_lights;
 pub mod window_lights;
 
@@ -31,6 +32,7 @@ impl Plugin for RenderPlugin {
             .add_plugins(crosswalks::CrosswalksPlugin)
             .add_plugins(parked_cars::ParkedCarsPlugin)
             .add_plugins(street_furniture::StreetFurniturePlugin)
+            .add_plugins(street_trees::StreetTreesPlugin)
             .add_plugins(window_lights::WindowLightsPlugin)
             .add_plugins(cloud_shadows::CloudShadowsPlugin);
     }

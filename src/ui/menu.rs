@@ -87,7 +87,7 @@ const BUTTON_SELECTED: Color = Color::srgba(0.1, 0.16, 0.12, 0.95);
 fn setup_menu(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    mut menu_state: ResMut<MenuState>,
+    menu_state: ResMut<MenuState>,
     mut sim: ResMut<SimulationConfig>,
     mut tod: ResMut<TimeOfDay>,
 ) {

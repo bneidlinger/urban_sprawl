@@ -1,5 +1,7 @@
 //! World management: terrain, chunks, spatial partitioning.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 pub mod grid;

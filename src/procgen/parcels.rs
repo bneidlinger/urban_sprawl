@@ -2,6 +2,8 @@
 //!
 //! Converts city blocks into buildable lots.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 /// A city block (closed polygon from road network cycles).

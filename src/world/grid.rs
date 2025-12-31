@@ -1,5 +1,7 @@
 //! Spatial partitioning grid for efficient queries.
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 use std::collections::HashMap;
 

@@ -3,6 +3,8 @@
 //! Reference: Chen et al. 2008 - "Interactive Procedural Street Modeling"
 //! https://www.sci.utah.edu/~chengu/street_sig08/street_sig08.pdf
 
+#![allow(dead_code)]
+
 use bevy::prelude::*;
 
 pub struct TensorFieldPlugin;

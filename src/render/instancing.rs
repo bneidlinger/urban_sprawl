@@ -2,6 +2,8 @@
 //!
 //! Uses Bevy's built-in instancing with custom instance data.
 
+#![allow(dead_code)]
+
 use bevy::{
     prelude::*,
     render::{

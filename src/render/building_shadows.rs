@@ -97,7 +97,7 @@ fn spawn_building_shadows(
 
         // Building base position (transform is at center, so base is at y - height/2)
         let building_pos = transform.translation;
-        let base_y = building_pos.y - building_height / 2.0;
+        let _base_y = building_pos.y - building_height / 2.0;
 
         // Shadow offset based on building height
         let shadow_offset = config.offset_direction * building_height * config.offset_scale;

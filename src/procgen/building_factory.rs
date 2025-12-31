@@ -3,6 +3,7 @@
 //! The factory consumes zoning and density information from [`LotPlans`]
 //! and emits per-lot building or park plans. This keeps visual spawning
 //! simple while ensuring growable zones produce appropriately scaled
+#![allow(dead_code)]
 //! footprints, floor counts, and façade styles.
 
 use bevy::prelude::*;
