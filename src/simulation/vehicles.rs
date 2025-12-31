@@ -1,6 +1,7 @@
 //! Vehicle movement and lane logic.
 
 use bevy::prelude::*;
+use petgraph::graph::{EdgeIndex, NodeIndex};
 
 /// Vehicle component.
 #[derive(Component)]
@@ -48,4 +49,29 @@ pub struct VehicleRoute {
 pub struct WaitingAtIntersection {
     pub intersection: Entity,
     pub wait_time: f32,
+}
+
+/// Marker component for moving vehicles (distinct from ParkedCar).
+#[derive(Component)]
+pub struct MovingVehicle;
+
+/// Navigation state for a vehicle traveling on the road network.
+#[derive(Component)]
+pub struct VehicleNavigation {
+    /// Current edge being traversed.
+    pub current_edge: EdgeIndex,
+    /// Direction of travel (true = from node_a to node_b, false = reverse).
+    pub forward: bool,
+    /// Progress along current edge (0.0 to 1.0).
+    pub progress: f32,
+    /// Current speed (world units per second).
+    pub speed: f32,
+    /// Target speed for this vehicle.
+    pub target_speed: f32,
+    /// Node index we're heading toward.
+    pub destination_node: NodeIndex,
+    /// Node we came from (to avoid immediate U-turns).
+    pub previous_node: Option<NodeIndex>,
+    /// Whether the vehicle should be stopping (for traffic lights).
+    pub stopping: bool,
 }

@@ -1,6 +1,7 @@
 //! Orthographic camera system with zoom, pan, and rotate controls.
 
 use bevy::{
+    input::mouse::MouseMotion,
     pbr::{FogFalloff, FogSettings},
     prelude::*,
 };
@@ -71,13 +72,16 @@ fn camera_zoom(
 }
 
 fn camera_pan(
-    mut query: Query<&mut Transform, With<IsometricCamera>>,
+    mut query: Query<(&mut Transform, &IsometricCamera)>,
     keys: Res<ButtonInput<KeyCode>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut mouse_motion: EventReader<MouseMotion>,
     time: Res<Time>,
 ) {
     let mut direction = Vec3::ZERO;
     let speed = 100.0;
 
+    // Keyboard panning
     if keys.pressed(KeyCode::KeyW) || keys.pressed(KeyCode::ArrowUp) {
         direction.z -= 1.0;
     }
@@ -93,9 +97,34 @@ fn camera_pan(
 
     if direction != Vec3::ZERO {
         let delta = direction.normalize() * speed * time.delta_secs();
-        for mut transform in &mut query {
+        for (mut transform, _) in &mut query {
             transform.translation += delta;
         }
+    }
+
+    // Mouse panning (middle button or right button drag)
+    if mouse_buttons.pressed(MouseButton::Middle) || mouse_buttons.pressed(MouseButton::Right) {
+        let mut mouse_delta = Vec2::ZERO;
+        for event in mouse_motion.read() {
+            mouse_delta += event.delta;
+        }
+
+        if mouse_delta != Vec2::ZERO {
+            for (mut transform, iso_cam) in &mut query {
+                // Scale pan speed based on zoom level
+                let pan_speed = iso_cam.zoom * 0.5;
+                // Map mouse X to world X/Z diagonal (isometric), mouse Y to opposite diagonal
+                let world_delta = Vec3::new(
+                    (-mouse_delta.x + mouse_delta.y) * pan_speed,
+                    0.0,
+                    (-mouse_delta.x - mouse_delta.y) * pan_speed,
+                );
+                transform.translation += world_delta;
+            }
+        }
+    } else {
+        // Clear any pending mouse motion events when not panning
+        mouse_motion.clear();
     }
 }
 

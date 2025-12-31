@@ -3,7 +3,8 @@
 //! Uses petgraph for the underlying graph structure.
 
 use bevy::prelude::*;
-use petgraph::graph::{NodeIndex, UnGraph};
+use petgraph::graph::{EdgeIndex, NodeIndex, UnGraph};
+use petgraph::visit::EdgeRef;
 use smallvec::SmallVec;
 
 pub struct RoadsPlugin;
@@ -148,5 +149,35 @@ impl RoadGraph {
     /// Get edge count.
     pub fn edge_count(&self) -> usize {
         self.graph.edge_count()
+    }
+
+    /// Get all edge indices.
+    pub fn edge_indices(&self) -> impl Iterator<Item = EdgeIndex> + '_ {
+        self.graph.edge_indices()
+    }
+
+    /// Get an edge by its index.
+    pub fn edge_by_index(&self, idx: EdgeIndex) -> Option<&RoadEdge> {
+        self.graph.edge_weight(idx)
+    }
+
+    /// Get the endpoint node indices for an edge.
+    pub fn edge_endpoints(&self, idx: EdgeIndex) -> Option<(NodeIndex, NodeIndex)> {
+        self.graph.edge_endpoints(idx)
+    }
+
+    /// Get a node by its index.
+    pub fn node_by_index(&self, idx: NodeIndex) -> Option<&RoadNode> {
+        self.graph.node_weight(idx)
+    }
+
+    /// Get neighbor node indices for a given node.
+    pub fn neighbors(&self, idx: NodeIndex) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.graph.neighbors(idx)
+    }
+
+    /// Get edges connected to a node with their indices.
+    pub fn edges_of_node(&self, idx: NodeIndex) -> impl Iterator<Item = EdgeIndex> + '_ {
+        self.graph.edges(idx).map(|e| e.id())
     }
 }

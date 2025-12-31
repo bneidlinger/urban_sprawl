@@ -5,13 +5,15 @@ use bevy::prelude::*;
 pub mod citizens;
 pub mod flow_field;
 pub mod traffic;
+pub mod vehicle_traffic;
 pub mod vehicles;
 
 pub struct SimulationPlugin;
 
 impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<SimulationConfig>()
+        app.add_plugins(vehicle_traffic::MovingVehiclePlugin)
+            .init_resource::<SimulationConfig>()
             .add_systems(Update, simulation_tick);
     }
 }

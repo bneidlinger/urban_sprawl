@@ -8,10 +8,34 @@ use crate::render::road_mesh::RoadMeshGenerated;
 
 pub struct TrafficLightsPlugin;
 
+/// Traffic light phase.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LightPhase {
+    #[default]
+    Green,
+    Yellow,
+    Red,
+}
+
+/// Controller for a traffic light at an intersection.
+/// One controller per intersection manages the light cycling.
+#[derive(Component)]
+pub struct TrafficLightController {
+    pub phase: LightPhase,
+    pub timer: f32,
+    pub node_index: NodeIndex,
+    pub green_duration: f32,
+    pub yellow_duration: f32,
+    pub red_duration: f32,
+}
+
 impl Plugin for TrafficLightsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TrafficLightConfig>()
-            .add_systems(Update, spawn_traffic_lights.run_if(should_spawn_lights));
+            .add_systems(Update, (
+                spawn_traffic_lights.run_if(should_spawn_lights),
+                update_traffic_light_phases,
+            ));
     }
 }
 
@@ -108,6 +132,16 @@ fn spawn_traffic_lights(
             continue; // Not a real intersection
         }
 
+        // Spawn a traffic light controller for this intersection
+        commands.spawn(TrafficLightController {
+            phase: LightPhase::Green,
+            timer: 0.0,
+            node_index: node_idx,
+            green_duration: 12.0,
+            yellow_duration: 3.0,
+            red_duration: 12.0,
+        });
+
         // Get directions to neighboring roads
         let mut road_directions: Vec<Vec2> = Vec::new();
         for neighbor_idx in &neighbors {
@@ -201,4 +235,32 @@ fn spawn_traffic_lights(
     }
 
     info!("Spawned {} traffic lights", light_count);
+}
+
+/// Update traffic light phases based on timers.
+fn update_traffic_light_phases(
+    time: Res<Time>,
+    mut controllers: Query<&mut TrafficLightController>,
+) {
+    let dt = time.delta_secs();
+
+    for mut controller in controllers.iter_mut() {
+        controller.timer += dt;
+
+        // Check if it's time to transition to next phase
+        let phase_duration = match controller.phase {
+            LightPhase::Green => controller.green_duration,
+            LightPhase::Yellow => controller.yellow_duration,
+            LightPhase::Red => controller.red_duration,
+        };
+
+        if controller.timer >= phase_duration {
+            controller.timer = 0.0;
+            controller.phase = match controller.phase {
+                LightPhase::Green => LightPhase::Yellow,
+                LightPhase::Yellow => LightPhase::Red,
+                LightPhase::Red => LightPhase::Green,
+            };
+        }
+    }
 }
