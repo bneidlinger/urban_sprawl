@@ -8,22 +8,40 @@ A large-scale procedural city simulator built with [Bevy](https://bevyengine.org
 
 ## Overview
 
-Urban Sprawl generates infinite, organic city layouts using tensor field-based road networks and procedural building placement. The project targets 100,000+ rendered entities at 60 FPS using Bevy's ECS architecture and hardware instancing.
+Urban Sprawl is a city-building simulation game built with Bevy. Start with a blank canvas or procedurally generated roads, then zone areas, place services, and watch your city grow. The simulation includes RCI demand, population growth, economy, land values, and service coverage - all affecting how your city develops.
+
+The project targets 100,000+ rendered entities at 60 FPS using Bevy's ECS architecture and hardware instancing.
 
 ![City Screenshot](docs/screenshot.png)
 
 ## Features
 
+### City Building
+- **Two Game Modes** - Sandbox (blank canvas) or Procedural (generated road network)
+- **Zone Painting** - Paint Residential, Commercial, and Industrial zones
+- **Road Drawing** - Click to place road nodes, auto-connects and snaps to existing network
+- **Service Buildings** - Place Police, Fire, Hospital, School, and Parks
+- **Demolish Tool** - Remove buildings and clear zones
+
+### City Simulation
+- **RCI Demand System** - SimCity-style demand meters for each zone type
+- **Building Growth** - Zones develop into buildings based on demand and land value
+- **Population** - Citizens move in based on housing, jobs, services, and commute quality
+- **Economy** - Tax income from buildings, maintenance costs, service expenses
+- **Land Value** - Composite score from pollution, crime, services, parks, commute
+- **Service Coverage** - Police reduce crime, hospitals boost health, schools boost education
+- **Traffic** - Commute calculation affects population happiness
+
 ### City Generation
-- **Tensor Field Road Generation** - Organic road networks using grid and radial basis field blending, traced via streamline integration
-- **Procedural Buildings** - Multiple building shapes (box, L-shape, tower-on-base, stepped) with zone-based placement and 5 facade styles (Glass, Brick, Concrete, Metal, Painted)
-- **Water System** - Procedural rivers with meandering paths, animated water shader, and automatic bridge placement
-- **Green Spaces** - Parks with procedurally placed trees and street trees lining sidewalks
+- **Tensor Field Roads** - Organic road networks using grid and radial basis field blending
+- **Procedural Buildings** - Multiple shapes (box, L-shape, tower-on-base, stepped) with 5 facade styles
+- **Water System** - Procedural rivers with animated water shader and automatic bridges
+- **Green Spaces** - Parks with procedurally placed trees and street trees
 
 ### Visual Details
 - **Day/Night Cycle** - Dynamic sun lighting with smooth transitions
-- **Facade-Aware Windows** - Building windows vary by architectural style with night-time illumination
-- **Rooftop Details** - AC units, water towers, antennas on building rooftops
+- **Facade-Aware Windows** - Building windows vary by style with night-time illumination
+- **Rooftop Details** - AC units, water towers, antennas
 - **Tilt-Shift Effect** - Post-processing for miniature/diorama aesthetic
 - **Cloud Shadows** - Drifting shadows using procedural noise
 
@@ -31,10 +49,6 @@ Urban Sprawl generates infinite, organic city layouts using tensor field-based r
 - **Moving Vehicles** - Cars driving on roads with traffic light awareness
 - **Pedestrians** - Citizens walking on sidewalks between intersections
 - **Street Furniture** - Lamps, traffic lights, fire hydrants, benches, parked cars
-
-### Technical
-- **Orthographic Camera** - Zoom, pan, and rotate controls for city exploration
-- **Terrain System** - Perlin noise height variation with all objects following terrain
 
 ## Getting Started
 
@@ -61,6 +75,14 @@ First build will take several minutes as Bevy compiles. Subsequent builds are fa
 | Middle/Right Mouse + Drag | Pan camera |
 | Mouse Wheel | Zoom in/out |
 | Q / E | Rotate camera |
+| R / C / I | Zone tool (Residential/Commercial/Industrial) |
+| D | Road drawing tool |
+| X | Demolish tool |
+| V | Query/inspect tool |
+| Escape | Deselect tool |
+| P | Pause simulation |
+| [ / ] | Slow down / Speed up time |
+| 1-4 | Time presets (Dawn/Day/Dusk/Night) |
 
 ## Architecture
 
@@ -90,17 +112,30 @@ See [CLAUDE.md](CLAUDE.md) for detailed architectural documentation.
 - [x] Rooftop details (AC units, antennas, water towers)
 - [x] Tilt-shift post-processing effect
 - [x] Cloud shadows
+- [x] Game modes (Sandbox / Procedural)
+- [x] Zone painting tool (R/C/I zones)
+- [x] Road drawing tool
+- [x] Demolish tool
+- [x] Service placement (Police, Fire, Hospital, School, Park)
+- [x] RCI demand system
+- [x] Building growth from zones
+- [x] Population tracking with growth factors
+- [x] City economy (budget, taxes, costs)
+- [x] Land value system (pollution, crime, services, commute)
+- [x] Service coverage effects
+- [x] Commute/traffic calculation
 
 ### In Progress
+- [ ] Save/Load system with JSON persistence
+- [ ] Autosave functionality
+
+### Planned
 - [ ] Weather system (fog, rain)
 - [ ] Public transit (buses, trains)
 - [ ] Landmark buildings
-
-### Planned
-- [ ] Full traffic simulation with pathfinding
+- [ ] Heat map overlays (crime, pollution, land value)
 - [ ] Citizen agents with daily schedules
-- [ ] Economic simulation
-- [ ] City growth over time
+- [ ] Advanced traffic simulation with pathfinding
 
 ## References
 

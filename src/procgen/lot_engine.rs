@@ -63,7 +63,7 @@ pub enum DensityTier {
 }
 
 /// Proposed zoning for a lot.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum ZoneType {
     Residential,
     Commercial,

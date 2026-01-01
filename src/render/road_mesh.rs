@@ -12,13 +12,44 @@ use petgraph::graph::NodeIndex;
 use crate::procgen::road_generator::RoadsGenerated;
 use crate::procgen::roads::{RoadGraph, RoadType};
 use crate::render::instancing::TerrainConfig;
+use crate::tools::road_draw::RoadMeshDirty;
 
 pub struct RoadMeshPlugin;
 
 impl Plugin for RoadMeshPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RoadMeshConfig>()
-            .add_systems(Update, generate_road_meshes.run_if(should_generate_meshes));
+            .add_systems(Update, generate_road_meshes.run_if(should_generate_meshes))
+            .add_systems(Update, handle_road_mesh_dirty);
+    }
+}
+
+/// Handle dynamic road mesh updates when roads are added/removed.
+fn handle_road_mesh_dirty(
+    mut commands: Commands,
+    mut dirty_events: EventReader<RoadMeshDirty>,
+    road_meshes: Query<Entity, With<RoadMesh>>,
+    sidewalk_meshes: Query<Entity, With<SidewalkMesh>>,
+    intersection_meshes: Query<Entity, With<IntersectionMesh>>,
+    marker: Query<Entity, With<RoadMeshGenerated>>,
+) {
+    if dirty_events.read().next().is_none() {
+        return;
+    }
+
+    // Clear all events
+    dirty_events.clear();
+
+    info!("Regenerating road meshes...");
+
+    // Despawn existing road meshes
+    for entity in road_meshes.iter().chain(sidewalk_meshes.iter()).chain(intersection_meshes.iter()) {
+        commands.entity(entity).despawn();
+    }
+
+    // Remove the generated marker so meshes will regenerate
+    for entity in &marker {
+        commands.entity(entity).despawn();
     }
 }
 

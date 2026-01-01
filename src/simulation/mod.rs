@@ -1,15 +1,22 @@
-//! Simulation systems for citizens, vehicles, and traffic.
+//! Simulation systems for citizens, vehicles, traffic, economy, and city growth.
 
 #![allow(dead_code)]
 
 use bevy::prelude::*;
 
 pub mod citizens;
+pub mod commute;
+pub mod demand;
+pub mod economy;
 pub mod flow_field;
+pub mod land_value;
 pub mod pedestrians;
+pub mod population;
+pub mod services;
 pub mod traffic;
 pub mod vehicle_traffic;
 pub mod vehicles;
+pub mod zones;
 
 pub struct SimulationPlugin;
 
@@ -17,6 +24,13 @@ impl Plugin for SimulationPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(vehicle_traffic::MovingVehiclePlugin)
             .add_plugins(pedestrians::PedestrianPlugin)
+            .add_plugins(economy::EconomyPlugin)
+            .add_plugins(demand::DemandPlugin)
+            .add_plugins(population::PopulationPlugin)
+            .add_plugins(zones::ZoneGrowthPlugin)
+            .add_plugins(land_value::LandValuePlugin)
+            .add_plugins(services::ServiceCoveragePlugin)
+            .add_plugins(commute::CommutePlugin)
             .init_resource::<SimulationConfig>()
             .add_systems(Update, simulation_tick);
     }

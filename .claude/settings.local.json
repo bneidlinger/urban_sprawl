@@ -5,7 +5,9 @@
       "Bash(cargo clean:*)",
       "Bash(cargo check:*)",
       "Bash(findstr:*)",
-      "Bash(cargo run:*)"
+      "Bash(cargo run:*)",
+      "Bash(timeout:*)",
+      "Bash(cat:*)"
     ]
   }
 }

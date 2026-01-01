@@ -10,12 +10,16 @@ use crate::simulation::SimulationConfig;
 
 pub mod debug_render;
 pub mod menu;
+pub mod stats_bar;
+pub mod toolbox;
 
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(menu::MenuPlugin)
+            .add_plugins(toolbox::ToolboxPlugin)
+            .add_plugins(stats_bar::StatsBarPlugin)
             .add_plugins(FrameTimeDiagnosticsPlugin::default())
             .add_plugins(debug_render::DebugRenderPlugin)
             .init_resource::<DebugConfig>()
@@ -77,13 +81,13 @@ fn setup_hud(mut commands: Commands) {
     let retro_green = Color::srgb(0.4, 0.95, 0.6);
     let retro_orange = Color::srgb(1.0, 0.6, 0.2);
 
-    // Top-left HUD stack
+    // Top-right HUD stack (moved from left to avoid toolbox overlap)
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
                 top: Val::Px(10.0),
-                left: Val::Px(10.0),
+                right: Val::Px(10.0),
                 padding: UiRect::axes(Val::Px(12.0), Val::Px(10.0)),
                 border: UiRect::all(Val::Px(1.0)),
                 row_gap: Val::Px(6.0),

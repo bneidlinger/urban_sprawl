@@ -5,6 +5,71 @@ All notable changes to IsoCitySim will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **City Simulation Mode** - Transform from generator to full city builder
+  - Game state machine with MainMenu, Playing states
+  - Sandbox mode (blank canvas) and Procedural mode (generated roads)
+  - Start menu with mode selection and terrain presets
+- **Zone Paint Tool** - Click-drag to paint RCI zones
+  - Residential (green), Commercial (blue), Industrial (yellow)
+  - Visual zone overlays on terrain
+  - Keyboard shortcuts: R/C/I for zone types
+- **Road Drawing Tool** - Click to place road nodes and edges
+  - Auto-connects to previous node
+  - Snaps to existing nodes within 15 units
+  - Dynamic road mesh regeneration
+  - Keyboard shortcut: D
+- **Demolish Tool** - Remove buildings and zones
+  - Click or drag to select demolition area
+  - Costs deducted from city budget
+  - Keyboard shortcut: X
+- **Service Buildings** - Place city services
+  - Police Station - Reduces crime in radius
+  - Fire Station - Provides fire coverage
+  - Hospital - Provides healthcare, affects population growth
+  - School - Provides education
+  - Park - Increases happiness and land value
+  - Each service has cost and coverage radius
+- **RCI Demand System** - SimCity-style zone demand
+  - Calculates Residential/Commercial/Industrial demand (-1.0 to 1.0)
+  - Based on population vs housing, jobs vs workers, zone balance
+  - Displayed in stats bar with visual meters
+- **Building Growth System** - Zones develop into buildings
+  - Growth probability based on demand and land value
+  - Building height scales with land value
+  - Taller, nicer buildings in high-value areas
+- **Population Tracking** - Dynamic population simulation
+  - Growth based on housing capacity, employment, finances
+  - Affected by service coverage (health, parks)
+  - Affected by commute quality and crime levels
+- **City Economy** - Budget and tax system
+  - Starting funds, tax income from buildings
+  - Road maintenance costs
+  - Service building costs
+- **Land Value System** - Comprehensive location scoring
+  - Pollution (from industrial buildings)
+  - Crime rate (reduced by police)
+  - Education access (from schools)
+  - Healthcare access (from hospitals)
+  - Park access (from parks)
+  - Commute factor (distance to jobs)
+  - Composite land value affects growth
+- **Service Coverage Effects** - City-wide service statistics
+  - Police/Fire/Healthcare/Education coverage percentages
+  - Crime modifier, fire risk, health/education modifiers
+  - Happiness modifier from parks
+- **Commute & Traffic Simulation** - Basic traffic modeling
+  - Average/max commute distance calculation
+  - Job accessibility score
+  - Traffic congestion based on buildings vs road capacity
+- **Toolbox UI** - Left sidebar with tool buttons
+  - Zones section (R/C/I)
+  - Roads section
+  - Services section (Po/Fi/Ho/Sc/Pk)
+  - Actions section (Demolish, Query)
+- **Stats Bar UI** - Top bar showing city statistics
+  - Population count with formatted numbers
+  - City funds
+  - RCI demand meters with color-coded bars
 - **River & Water System** - Procedural river cutting through the city
   - Meandering river generation with cubic Bezier curves
   - Custom water shader with animated waves, reflections, and foam

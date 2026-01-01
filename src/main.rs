@@ -6,9 +6,11 @@
 use bevy::prelude::*;
 
 mod camera;
+mod game_state;
 mod procgen;
 mod render;
 mod simulation;
+mod tools;
 mod ui;
 mod world;
 
@@ -25,6 +27,10 @@ fn main() {
             }),
             ..default()
         }))
+        // Game state management
+        .add_plugins(game_state::GameStatePlugin)
+        // Player tools
+        .add_plugins(tools::ToolsPlugin)
         // Core plugins
         .add_plugins(camera::CameraPlugin)
         .add_plugins(render::RenderPlugin)

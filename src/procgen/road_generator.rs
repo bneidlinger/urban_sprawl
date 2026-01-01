@@ -9,6 +9,8 @@
 use bevy::prelude::*;
 use smallvec::SmallVec;
 
+use crate::game_state::GameMode;
+
 use super::river::River;
 use super::roads::{RoadGraph, RoadNodeType, RoadType};
 use super::streamline::{generate_seeds, Streamline, StreamlineConfig, StreamlineIntegrator};
@@ -65,12 +67,24 @@ impl Plugin for RoadGeneratorPlugin {
             .init_resource::<RoadsGenerated>()
             .add_event::<GenerateRoadsEvent>()
             .add_systems(Update, generate_roads_on_event)
-            .add_systems(Startup, trigger_initial_generation);
+            // Generate roads when entering Procedural mode
+            .add_systems(OnEnter(GameMode::Procedural), trigger_procedural_generation)
+            // Mark roads as "generated" (empty) when entering Sandbox mode
+            .add_systems(OnEnter(GameMode::Sandbox), setup_sandbox_mode);
     }
 }
 
-fn trigger_initial_generation(mut events: EventWriter<GenerateRoadsEvent>) {
+/// Trigger road generation when entering Procedural mode.
+fn trigger_procedural_generation(mut events: EventWriter<GenerateRoadsEvent>) {
+    info!("Entering Procedural mode - generating road network");
     events.send(GenerateRoadsEvent);
+}
+
+/// Set up empty road graph for Sandbox mode.
+fn setup_sandbox_mode(mut road_graph: ResMut<RoadGraph>, mut generated: ResMut<RoadsGenerated>) {
+    info!("Entering Sandbox mode - starting with blank canvas");
+    *road_graph = RoadGraph::default();
+    generated.0 = true;
 }
 
 fn generate_roads_on_event(
