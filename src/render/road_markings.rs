@@ -81,6 +81,11 @@ fn generate_road_markings(
             continue;
         }
 
+        // Skip edges that cross water - bridges don't get road markings
+        if edge.crosses_water {
+            continue;
+        }
+
         // Only add markings to major roads
         let (add_center, add_edges) = match edge.road_type {
             RoadType::Highway => (true, true),
@@ -215,6 +220,10 @@ fn create_dashed_line(
 fn point_at_distance(segments: &[(Vec2, Vec2, f32)], distance: f32) -> Option<Vec2> {
     for &(start, end, seg_start) in segments {
         let seg_length = start.distance(end);
+        // Skip degenerate segments
+        if seg_length < 0.001 {
+            continue;
+        }
         let seg_end = seg_start + seg_length;
 
         if distance >= seg_start && distance <= seg_end {
@@ -314,6 +323,11 @@ impl TerrainSampler {
     }
 
     fn sample(&self, x: f32, z: f32) -> f32 {
+        // Guard against NaN/Inf coordinates
+        if !x.is_finite() || !z.is_finite() {
+            return 0.0;
+        }
+
         let mut height = 0.0;
         let mut amplitude = 1.0;
         let mut frequency = self.noise_scale;

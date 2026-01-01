@@ -4,35 +4,39 @@
 
 ### Completed Features
 - **Procedural Road Network**: Tensor field-based generation with organic layouts
-- **Building Generation**: 4 shapes (Box, L-Shape, Tower, Stepped) × 3 zones
-- **Parks & Trees**: Green spaces with procedural tree placement
+- **Building Generation**: 4 shapes × 5 facade styles × 3 zones with facade-aware windows
+- **Parks & Trees**: Green spaces with procedural tree placement + street trees
 - **Road Infrastructure**: Sidewalks, lane markings, crosswalks, intersections
 - **Street Furniture**: Lamps, traffic lights, fire hydrants, benches, parked cars
-- **Camera System**: Isometric view with pan/zoom/rotate
+- **Camera System**: Isometric view with pan/zoom/rotate + mouse panning
+- **Day/Night Cycle**: Dynamic sun lighting with window illumination
+- **Water System**: Procedural river with animated shader and bridges
+- **Moving Vehicles**: Cars with traffic light awareness
+- **Pedestrians**: Citizens walking on sidewalks
+- **Visual Effects**: Tilt-shift, cloud shadows, building shadows
+- **Rooftop Details**: AC units, antennas, water towers
 
 ### Scaffolded (Not Active)
-- Traffic simulation (Nagel-Schreckenberg CA)
+- Full traffic simulation (Nagel-Schreckenberg CA)
 - Citizen agents (needs, schedules, states)
-- Flow field pathfinding
-- Terrain height maps
 - Wave Function Collapse zoning
 
 ---
 
 ## Phase 1: Visual Polish & Atmosphere
 
-### 1.1 Day/Night Cycle
-- [ ] Sun position animation (directional light rotation)
-- [ ] Sky color gradient (dawn → day → dusk → night)
-- [ ] Street lamp activation at night (emissive intensity ramp)
-- [ ] Building window lights at night (random pattern)
+### 1.1 Day/Night Cycle ✅
+- [x] Sun position animation (directional light rotation)
+- [x] Sky color gradient (dawn → day → dusk → night)
+- [x] Street lamp activation at night (emissive intensity ramp)
+- [x] Building window lights at night (random pattern)
 - [ ] Moon and stars for night sky
 
 ### 1.2 Weather System
 - [ ] Fog/haze for depth and atmosphere
 - [ ] Rain particles with wet road reflections
 - [ ] Puddle generation on roads during rain
-- [ ] Cloud shadows moving across city
+- [x] Cloud shadows moving across city ✅
 
 ### 1.3 Enhanced Lighting
 - [ ] Ambient occlusion for building bases
@@ -40,11 +44,11 @@
 - [ ] Colored accent lighting (neon signs, storefronts)
 - [ ] Car headlights/taillights
 
-### 1.4 Water Features
-- [ ] Rivers cutting through city
-- [ ] Bridges over water
+### 1.4 Water Features ✅
+- [x] Rivers cutting through city
+- [x] Bridges over water
 - [ ] Fountains in parks
-- [ ] Reflective water surfaces
+- [x] Reflective water surfaces
 - [ ] Waterfront promenades
 
 ---
@@ -52,11 +56,11 @@
 ## Phase 2: Building & Architecture Detail
 
 ### 2.1 Facade Details
-- [ ] Window grid patterns on buildings
+- [x] Window grid patterns on buildings ✅
 - [ ] Balconies on residential buildings
 - [ ] Storefronts with awnings on commercial ground floors
-- [ ] Rooftop details (AC units, water towers, helipads)
-- [ ] Antenna/spire variations on tall buildings
+- [x] Rooftop details (AC units, water towers, helipads) ✅
+- [x] Antenna/spire variations on tall buildings ✅
 
 ### 2.2 Landmark Buildings
 - [ ] Unique procedural landmarks (clock towers, monuments)
@@ -81,9 +85,9 @@
 
 ## Phase 3: Transportation & Movement
 
-### 3.1 Moving Vehicles
-- [ ] Cars driving on roads (flow field pathfinding)
-- [ ] Traffic light response (stop on red)
+### 3.1 Moving Vehicles ✅
+- [x] Cars driving on roads (waypoint navigation)
+- [x] Traffic light response (stop on red)
 - [ ] Lane changing behavior
 - [ ] Vehicle variety (sedans, SUVs, trucks, buses)
 - [ ] Emergency vehicles with sirens
@@ -95,11 +99,11 @@
 - [ ] Train cars moving on tracks
 - [ ] Subway station entrances
 
-### 3.3 Pedestrians
-- [ ] Walking citizens on sidewalks
+### 3.3 Pedestrians ✅
+- [x] Walking citizens on sidewalks
 - [ ] Crosswalk usage (wait for signal)
 - [ ] Crowd density near commercial areas
-- [ ] Simple low-poly character models
+- [x] Simple low-poly character models
 
 ### 3.4 Parking Infrastructure
 - [ ] Parking lots (surface lots in suburbs)
@@ -132,7 +136,7 @@
 - [ ] Utility boxes on sidewalks
 
 ### 4.4 Nature Integration
-- [ ] Street trees along sidewalks
+- [x] Street trees along sidewalks ✅
 - [ ] Planters and flower beds
 - [ ] Community gardens
 - [ ] Green roofs on some buildings
@@ -178,7 +182,7 @@
 - [ ] Seasonal color variations
 
 ### 6.2 Stylization Options
-- [ ] Tilt-shift blur effect (miniature look)
+- [x] Tilt-shift blur effect (miniature look) ✅
 - [ ] Outline/cel-shading option
 - [ ] Voxel-style building option
 - [ ] Low-poly aesthetic mode
@@ -200,17 +204,17 @@
 ## Implementation Priority
 
 ### Immediate (High Visual Impact)
-1. **Day/Night Cycle** - Dramatic atmosphere change
-2. **Window Lights** - Buildings come alive at night
-3. **Moving Vehicles** - City feels alive
-4. **Street Trees** - Softer, more natural look
-5. **Tilt-Shift Effect** - Instant "miniature city" aesthetic
+1. **Day/Night Cycle** - Dramatic atmosphere change ✅
+2. **Window Lights** - Buildings come alive at night ✅
+3. **Moving Vehicles** - City feels alive ✅
+4. **Street Trees** - Softer, more natural look ✅
+5. **Tilt-Shift Effect** - Instant "miniature city" aesthetic ✅
 
 ### Short Term
-6. Water features (rivers, fountains)
-7. Pedestrians on sidewalks
-8. Building facade windows
-9. Rooftop details
+6. Water features (rivers, fountains) ✅
+7. Pedestrians on sidewalks ✅
+8. Building facade windows ✅
+9. Rooftop details ✅
 10. Weather (fog first, then rain)
 
 ### Medium Term

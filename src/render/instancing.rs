@@ -20,6 +20,8 @@ use bevy::{
 use bytemuck::{Pod, Zeroable};
 use noise::{NoiseFn, Perlin};
 
+use crate::procgen::river::River;
+
 pub struct InstancingPlugin;
 
 impl Plugin for InstancingPlugin {
@@ -27,7 +29,7 @@ impl Plugin for InstancingPlugin {
         app.add_plugins(MaterialPlugin::<InstancedMaterial>::default())
             .init_resource::<InstancingConfig>()
             .init_resource::<TerrainConfig>()
-            .add_systems(Startup, setup_instanced_cubes);
+            .add_systems(PostStartup, setup_instanced_cubes);
     }
 }
 
@@ -159,11 +161,12 @@ fn setup_instanced_cubes(
     mut materials: ResMut<Assets<StandardMaterial>>,
     config: Res<InstancingConfig>,
     terrain_config: Res<TerrainConfig>,
+    river: Res<River>,
 ) {
     info!("Setting up {} instanced cubes...", config.instance_count);
 
-    // Terrain with Perlin noise height variation
-    let terrain_mesh = generate_terrain_mesh(&terrain_config);
+    // Terrain with Perlin noise height variation and river carving
+    let terrain_mesh = generate_terrain_mesh(&terrain_config, &river);
     commands.spawn((
         Mesh3d(meshes.add(terrain_mesh)),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -237,8 +240,8 @@ fn setup_instanced_cubes(
 #[derive(Component)]
 pub struct Terrain;
 
-/// Generate a terrain mesh with Perlin noise height variation.
-fn generate_terrain_mesh(config: &TerrainConfig) -> Mesh {
+/// Generate a terrain mesh with Perlin noise height variation and river carving.
+fn generate_terrain_mesh(config: &TerrainConfig, river: &River) -> Mesh {
     let perlin = Perlin::new(config.seed);
     let res = config.resolution as usize;
     let half_size = config.size / 2.0;
@@ -255,7 +258,7 @@ fn generate_terrain_mesh(config: &TerrainConfig) -> Mesh {
             let world_z = (z as f32 * step) - half_size;
 
             // Sample fractal Perlin noise (multiple octaves)
-            let height = sample_terrain_height(
+            let mut height = sample_terrain_height(
                 &perlin,
                 world_x,
                 world_z,
@@ -263,6 +266,24 @@ fn generate_terrain_mesh(config: &TerrainConfig) -> Mesh {
                 config.height_scale,
                 config.octaves,
             );
+
+            // Carve river channel into terrain
+            if !river.centerline.is_empty() {
+                let point = Vec2::new(world_x, world_z);
+                let river_dist = river.signed_distance(point);
+
+                if river_dist < 0.0 {
+                    // Inside river - set to riverbed (below water level)
+                    height = river.water_level - 1.0;
+                } else if river_dist < river.bank_slope_width {
+                    // Bank slope - smooth transition from riverbed to terrain
+                    let t = river_dist / river.bank_slope_width;
+                    // Ease in/out for smoother banks
+                    let t_smooth = t * t * (3.0 - 2.0 * t);
+                    let bank_bottom = river.water_level - 0.5;
+                    height = bank_bottom + (height - bank_bottom) * t_smooth;
+                }
+            }
 
             positions.push([world_x, height, world_z]);
             normals.push([0.0, 1.0, 0.0]); // Will be recalculated

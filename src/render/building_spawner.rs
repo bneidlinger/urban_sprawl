@@ -36,6 +36,7 @@ pub struct BuildingsSpawned(pub bool);
 pub struct Building {
     pub lot_index: usize,
     pub building_type: BuildingArchetype,
+    pub facade_style: FacadeStyle,
 }
 
 #[derive(Resource)]
@@ -187,6 +188,7 @@ fn spawn_buildings(
                             terrain_height,
                             plan.lot_index,
                             plan.building_type,
+                            plan.facade,
                         );
                     }
                     BuildingShape::LShape => {
@@ -201,6 +203,7 @@ fn spawn_buildings(
                             &mut rng,
                             plan.lot_index,
                             plan.building_type,
+                            plan.facade,
                         );
                     }
                     BuildingShape::TowerOnBase => {
@@ -216,6 +219,7 @@ fn spawn_buildings(
                             &mut rng,
                             plan.lot_index,
                             plan.building_type,
+                            plan.facade,
                         );
                     }
                     BuildingShape::Stepped => {
@@ -230,6 +234,7 @@ fn spawn_buildings(
                             &mut rng,
                             plan.lot_index,
                             plan.building_type,
+                            plan.facade,
                         );
                     }
                 }
@@ -251,6 +256,7 @@ fn spawn_box_building(
     terrain_height: f32,
     lot_index: usize,
     building_type: BuildingArchetype,
+    facade_style: FacadeStyle,
 ) {
     let mesh = meshes.add(Cuboid::new(size.x, height, size.y));
     commands.spawn((
@@ -260,6 +266,7 @@ fn spawn_box_building(
         Building {
             lot_index,
             building_type,
+            facade_style,
         },
     ));
 }
@@ -275,6 +282,7 @@ fn spawn_l_building(
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingArchetype,
+    facade_style: FacadeStyle,
 ) {
     // L-shape: two overlapping rectangles
     let wing_ratio = 0.4 + rng.gen::<f32>() * 0.2; // 40-60% of size
@@ -295,6 +303,7 @@ fn spawn_l_building(
         Building {
             lot_index,
             building_type,
+            facade_style,
         },
     ));
 
@@ -317,6 +326,7 @@ fn spawn_l_building(
         Building {
             lot_index,
             building_type,
+            facade_style,
         },
     ));
 }
@@ -333,6 +343,7 @@ fn spawn_tower_building(
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingArchetype,
+    facade_style: FacadeStyle,
 ) {
     // Base podium
     let base_height = 4.0 + rng.gen::<f32>() * 4.0;
@@ -345,6 +356,7 @@ fn spawn_tower_building(
         Building {
             lot_index,
             building_type,
+            facade_style,
         },
     ));
 
@@ -375,6 +387,7 @@ fn spawn_tower_building(
             Building {
                 lot_index,
                 building_type,
+                facade_style,
             },
         ));
     }
@@ -391,6 +404,7 @@ fn spawn_stepped_building(
     rng: &mut StdRng,
     lot_index: usize,
     building_type: BuildingArchetype,
+    facade_style: FacadeStyle,
 ) {
     let num_steps = 2 + rng.gen_range(0..2);
     let step_height = height / num_steps as f32;
@@ -409,6 +423,7 @@ fn spawn_stepped_building(
             Building {
                 lot_index,
                 building_type,
+                facade_style,
             },
         ));
     }

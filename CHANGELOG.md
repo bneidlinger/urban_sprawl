@@ -5,6 +5,35 @@ All notable changes to IsoCitySim will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **River & Water System** - Procedural river cutting through the city
+  - Meandering river generation with cubic Bezier curves
+  - Custom water shader with animated waves, reflections, and foam
+  - Automatic bridge spawning at river crossings (26 bridges)
+  - Road network avoids water except at bridge points
+- **Bridge Rendering** - Realistic bridge deck meshes over water
+  - Proper road width matching for Highway/Major/Minor types
+  - Elevated decks with terrain-following approaches
+- **Facade-Aware Windows** - Building windows vary by architectural style
+  - Glass facades: Large floor-to-ceiling panels (2.4m×2.6m), blue-tinted, highly reflective
+  - Brick facades: Small traditional windows (1.0m×1.4m) with white frames
+  - Concrete facades: Medium windows (1.5m×1.8m), minimal grey frames
+  - Metal/Industrial: Large sparse openings (2.0m×2.2m), steel frames
+  - Painted facades: Traditional windows (1.1m×1.5m) with white frames
+  - Different occupancy rates and night intensities per style
+  - 1,692 window frames spawned for traditional styles
+- **Rooftop Details** - Procedural rooftop equipment and structures
+  - AC units on commercial/industrial buildings (60% probability)
+  - Water towers on traditional residential (Brick/Painted facades)
+  - Communication antennas on various buildings (20% probability)
+  - Helipads on tall commercial buildings (>20m)
+  - Grey metal materials for industrial look
+  - ~460 rooftop elements spawned
+- **Tilt-Shift Effect** - Post-processing effect for miniature/diorama look
+  - Custom WGSL shader (`assets/shaders/tilt_shift.wgsl`)
+  - Configurable focus center, width, blur amount, and saturation
+  - Gaussian blur increases toward screen edges, sharp focus band in center
+  - Saturation boost for enhanced miniature aesthetic
+  - Toggle via `TiltShiftConfig.enabled`
 - **Pedestrians** - Walking pedestrians on sidewalks
   - 50 pedestrians spawned at road nodes, walking at ~1.4 m/s
   - Sidewalk offset calculation using perpendicular road direction

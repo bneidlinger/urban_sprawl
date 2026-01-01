@@ -68,6 +68,72 @@ DirectionalLight {
   - `spread: 1.2` - shadow size multiplier
 - Shadows follow terrain height
 
+### Tilt-Shift Effect (Miniature Look)
+**Files:** `src/render/tilt_shift.rs`, `assets/shaders/tilt_shift.wgsl`
+
+- Post-processing effect that blurs top and bottom of screen
+- Sharp focus band in center creates "miniature city" aesthetic
+- Configurable via `TiltShiftConfig` resource:
+  - `enabled: true` - toggle effect on/off
+  - `focus_center: 0.5` - vertical center of focus band (0-1)
+  - `focus_width: 0.25` - width of sharp focus band
+  - `blur_amount: 3.0` - maximum blur at screen edges
+  - `blur_samples: 8` - quality (higher = smoother blur)
+  - `saturation: 1.15` - color saturation boost for miniature feel
+- Uses Gaussian blur with smooth falloff from focus band
+- Runs as post-process after tonemapping
+
+### River & Water System
+**Files:** `src/procgen/river.rs`, `src/render/water.rs`, `src/render/bridges.rs`, `assets/shaders/water.wgsl`
+
+- Procedural meandering river using cubic Bezier curves
+- Custom water shader with animated waves, reflections, and foam
+- Automatic bridge spawning where roads cross water (26 bridges)
+- Road network respects water boundaries
+- Configurable via `RiverConfig` resource
+
+### Facade-Aware Windows
+**File:** `src/render/window_lights.rs`
+
+- Building windows vary by facade style (Glass, Brick, Concrete, Metal, Painted)
+- Glass facades: Large floor-to-ceiling panels (2.4m×2.6m), blue-tinted
+- Brick/Painted facades: Small windows (1.0m×1.4m) with white frames
+- Window frames spawned for traditional styles (~1,700 frames)
+- Different occupancy rates and night intensities per style
+
+### Rooftop Details
+**File:** `src/render/rooftop_details.rs`
+
+- AC units on commercial/industrial buildings (60% probability)
+- Water towers on traditional residential (Brick/Painted facades)
+- Communication antennas on various buildings (20% probability)
+- Helipads on tall commercial buildings
+- ~460 rooftop elements spawned
+
+### Street Trees
+**File:** `src/render/street_trees.rs`
+
+- Trees lining sidewalks on Major and Minor roads
+- 25m spacing, alternating sides of street
+- Varied heights (5-10m) and foliage sizes (2-3.5m)
+- Three foliage color variations
+- ~1,700 street trees spawned
+
+### Moving Vehicles
+**File:** `src/simulation/vehicle_traffic.rs`
+
+- Cars driving on road network with waypoint navigation
+- Traffic light awareness (stop on red/yellow)
+- Speed varies by road type (Highway 1.5x, Major 1.0x, Minor 0.8x)
+- ~25 vehicles active at a time
+
+### Pedestrians
+**File:** `src/simulation/pedestrians.rs`
+
+- Citizens walking on sidewalks between intersections
+- Varied clothing colors and skin tones
+- ~50 pedestrians active
+
 ## In Progress
 
 None currently.
@@ -76,12 +142,13 @@ None currently.
 
 From `graphics.md` roadmap:
 
-| Feature | Category | Approach |
-|---------|----------|----------|
-| Rain/snow | Weather | Particle system (bevy_hanabi) |
-| Water bodies | Terrain | Separate mesh with reflective material |
-| Industrial smoke | Animation | Particle emitters on factories |
-| Bloom/tilt-shift | Post-process | Bevy post-processing pipeline |
+| Feature | Category | Status |
+|---------|----------|--------|
+| Rain/snow | Weather | Next priority |
+| Fog/haze | Weather | Next priority |
+| Industrial smoke | Animation | Planned |
+| Bloom effect | Post-process | Planned |
+| Car headlights | Vehicles | Planned |
 
 ## Configuration
 
@@ -89,7 +156,10 @@ All visual systems can be tuned via their respective `Resource` structs:
 
 - `TimeOfDay` - day/night cycle speed, current time
 - `DayNightConfig` - sun intensity, ambient colors, sky colors
-- `WindowLightConfig` - window size, occupancy rate
+- `WindowLightConfig` - window size, occupancy rate, facade settings
 - `TerrainConfig` - noise parameters, mesh resolution
 - `CloudShadowConfig` - wind, coverage, opacity, noise scale
 - `BuildingShadowConfig` - offset direction, opacity, spread
+- `TiltShiftConfig` - focus band, blur amount, saturation
+- `RiverConfig` - river path, width, water level
+- `RooftopDetailConfig` - AC/antenna/water tower probabilities

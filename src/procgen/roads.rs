@@ -40,6 +40,12 @@ pub struct RoadEdge {
     pub road_type: RoadType,
     /// Length in world units.
     pub length: f32,
+    /// Whether this road segment crosses water (needs bridge).
+    pub crosses_water: bool,
+    /// Entry point where road enters water (if crosses_water).
+    pub water_entry: Option<Vec2>,
+    /// Exit point where road exits water (if crosses_water).
+    pub water_exit: Option<Vec2>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,6 +63,27 @@ impl RoadEdge {
             points,
             road_type,
             length,
+            crosses_water: false,
+            water_entry: None,
+            water_exit: None,
+        }
+    }
+
+    /// Create a road edge that crosses water.
+    pub fn new_bridge(
+        points: SmallVec<[Vec2; 8]>,
+        road_type: RoadType,
+        water_entry: Vec2,
+        water_exit: Vec2,
+    ) -> Self {
+        let length = Self::calculate_length(&points);
+        Self {
+            points,
+            road_type,
+            length,
+            crosses_water: true,
+            water_entry: Some(water_entry),
+            water_exit: Some(water_exit),
         }
     }
 
@@ -94,6 +121,20 @@ impl RoadGraph {
         road_type: RoadType,
     ) {
         let edge = RoadEdge::new(points, road_type);
+        self.graph.add_edge(a, b, edge);
+    }
+
+    /// Add a bridge edge between two nodes (crosses water).
+    pub fn add_bridge_edge(
+        &mut self,
+        a: NodeIndex,
+        b: NodeIndex,
+        points: SmallVec<[Vec2; 8]>,
+        road_type: RoadType,
+        water_entry: Vec2,
+        water_exit: Vec2,
+    ) {
+        let edge = RoadEdge::new_bridge(points, road_type, water_entry, water_exit);
         self.graph.add_edge(a, b, edge);
     }
 

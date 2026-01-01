@@ -7,6 +7,7 @@
 use bevy::prelude::*;
 
 use super::parcels::Lot;
+use super::river::River;
 use super::roads::RoadGraph;
 use super::road_generator::RoadsGenerated;
 
@@ -33,6 +34,7 @@ fn should_extract_blocks(
 pub struct BlockConfig {
     pub grid_cell_size: f32,
     pub road_clearance: f32,  // Min distance from road center
+    pub river_clearance: f32, // Min distance from river edge
     pub city_half_size: f32,
 }
 
@@ -41,6 +43,7 @@ impl Default for BlockConfig {
         Self {
             grid_cell_size: 12.0,   // Size of each potential lot
             road_clearance: 8.0,    // Stay this far from road centerline
+            river_clearance: 5.0,   // Stay this far from river banks
             city_half_size: 250.0,
         }
     }
@@ -62,6 +65,7 @@ pub struct CityLots {
 /// Extract buildable lots using grid-based approach.
 fn extract_blocks(
     road_graph: Res<RoadGraph>,
+    river: Res<River>,
     config: Res<BlockConfig>,
     mut blocks: ResMut<CityBlocks>,
     mut lots: ResMut<CityLots>,
@@ -86,7 +90,10 @@ fn extract_blocks(
             // Check if this cell is far enough from all roads
             let min_dist = min_distance_to_roads(&cell_center, &road_points);
 
-            if min_dist > clearance {
+            // Check if this cell is far enough from river
+            let river_dist = river.signed_distance(cell_center);
+
+            if min_dist > clearance && river_dist > config.river_clearance {
                 // Create a lot at this position
                 let _half_cell = cell / 2.0 - 1.0; // Slight gap between lots
                 let vertices = vec![

@@ -57,7 +57,7 @@ pub enum BuildingArchetype {
 }
 
 /// Simple façade/material hints that the renderer can map onto palettes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum FacadeStyle {
     Brick,
     Concrete,

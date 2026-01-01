@@ -9,6 +9,7 @@
 use bevy::prelude::*;
 use smallvec::SmallVec;
 
+use super::river::River;
 use super::roads::{RoadGraph, RoadNodeType, RoadType};
 use super::streamline::{generate_seeds, Streamline, StreamlineConfig, StreamlineIntegrator};
 use super::tensor::TensorField;
@@ -77,6 +78,7 @@ fn generate_roads_on_event(
     mut tensor_field: ResMut<TensorField>,
     mut road_graph: ResMut<RoadGraph>,
     config: Res<RoadGenConfig>,
+    river: Res<River>,
     mut generated: ResMut<RoadsGenerated>,
 ) {
     for _ in events.read() {
@@ -86,43 +88,58 @@ fn generate_roads_on_event(
         *road_graph = RoadGraph::default();
         tensor_field.basis_fields.clear();
 
-        // Build the tensor field
-        build_tensor_field(&mut tensor_field, &config);
+        // Build the tensor field (with river influence)
+        build_tensor_field(&mut tensor_field, &config, &river);
 
-        // Generate the road network
-        generate_road_network(&tensor_field, &mut road_graph, &config);
+        // Generate the road network (river-aware)
+        generate_road_network(&tensor_field, &mut road_graph, &config, &river);
 
         generated.0 = true;
 
+        // Count bridges
+        let bridge_count = road_graph.edges().filter(|e| e.crosses_water).count();
+
         info!(
-            "Road generation complete: {} nodes, {} edges",
+            "Road generation complete: {} nodes, {} edges ({} bridges)",
             road_graph.node_count(),
-            road_graph.edge_count()
+            road_graph.edge_count(),
+            bridge_count
         );
     }
 }
 
-/// Build a tensor field with downtown radial + grid suburbs.
-fn build_tensor_field(field: &mut TensorField, config: &RoadGenConfig) {
+/// Build a tensor field with downtown radial + grid suburbs + river influence.
+fn build_tensor_field(field: &mut TensorField, config: &RoadGenConfig, river: &River) {
     // Global grid (aligned to axes or slight angle)
     field.add_grid(config.grid_angle);
 
     // Downtown radial field
     field.add_radial(config.downtown_center, config.radial_decay);
 
-    // Could add more features:
-    // - Polylines for rivers, highways
-    // - Secondary radial centers for districts
+    // Add river as a polyline to guide roads parallel to it
+    if !river.centerline.is_empty() {
+        let river_points: Vec<Vec2> = river.centerline.iter().map(|p| p.position).collect();
+        field.add_polyline(river_points, 0.012); // Moderate influence
+    }
 }
 
-/// Generate road network by tracing streamlines.
-fn generate_road_network(field: &TensorField, graph: &mut RoadGraph, config: &RoadGenConfig) {
+/// Generate road network by tracing streamlines (river-aware).
+fn generate_road_network(
+    field: &TensorField,
+    graph: &mut RoadGraph,
+    config: &RoadGenConfig,
+    river: &River,
+) {
     let half_size = config.city_size / 2.0;
     let bounds = Rect::new(-half_size, -half_size, half_size, half_size);
 
-    // Generate seed points
+    // Generate seed points (excluding seeds inside river)
     let seed_spacing = config.streamline.separation * 2.0;
-    let seeds = generate_seeds(bounds, seed_spacing);
+    let all_seeds = generate_seeds(bounds, seed_spacing);
+    let seeds: Vec<Vec2> = all_seeds
+        .into_iter()
+        .filter(|s| !river.contains_point(*s))
+        .collect();
 
     let integrator = StreamlineIntegrator::new(field, config.streamline.clone());
 
@@ -130,6 +147,7 @@ fn generate_road_network(field: &TensorField, graph: &mut RoadGraph, config: &Ro
     let mut all_streamlines: Vec<Streamline> = Vec::new();
 
     // Trace major roads (following major eigenvector)
+    // Major roads CAN cross water (become bridges)
     for seed in &seeds {
         if !is_valid_seed(*seed, &all_streamlines, config.streamline.separation) {
             continue;
@@ -137,12 +155,13 @@ fn generate_road_network(field: &TensorField, graph: &mut RoadGraph, config: &Ro
 
         let streamline = integrator.trace(*seed, true);
         if streamline.points.len() >= 3 {
-            add_streamline_to_graph(&streamline, graph, config, RoadType::Major);
+            add_streamline_to_graph(&streamline, graph, config, RoadType::Major, river, true);
             all_streamlines.push(streamline);
         }
     }
 
     // Trace minor roads (following minor eigenvector - cross streets)
+    // Minor roads CANNOT cross water (stop at river edge)
     for seed in &seeds {
         if !is_valid_seed(*seed, &all_streamlines, config.streamline.separation * 0.7) {
             continue;
@@ -150,7 +169,7 @@ fn generate_road_network(field: &TensorField, graph: &mut RoadGraph, config: &Ro
 
         let streamline = integrator.trace(*seed, false);
         if streamline.points.len() >= 3 {
-            add_streamline_to_graph(&streamline, graph, config, RoadType::Minor);
+            add_streamline_to_graph(&streamline, graph, config, RoadType::Minor, river, false);
             all_streamlines.push(streamline);
         }
     }
@@ -168,12 +187,14 @@ fn is_valid_seed(seed: Vec2, streamlines: &[Streamline], min_distance: f32) -> b
     true
 }
 
-/// Convert a streamline to road graph edges.
+/// Convert a streamline to road graph edges (river-aware).
 fn add_streamline_to_graph(
     streamline: &Streamline,
     graph: &mut RoadGraph,
     config: &RoadGenConfig,
     road_type: RoadType,
+    river: &River,
+    allow_bridges: bool,
 ) {
     if streamline.points.len() < 2 {
         return;
@@ -181,19 +202,72 @@ fn add_streamline_to_graph(
 
     let snap_dist = config.streamline.snap_distance;
 
-    // Start node
+    // Start node - skip if inside river
     let start_pos = streamline.points[0].position;
+    if river.contains_point(start_pos) {
+        return;
+    }
+
     let mut prev_node = graph.snap_or_create(start_pos, snap_dist, RoadNodeType::Endpoint);
     let mut segment_points: SmallVec<[Vec2; 8]> = SmallVec::new();
     segment_points.push(start_pos);
 
-    // Track segment length incrementally to avoid repeated scans of the point list
+    // Track segment length incrementally
     let mut segment_length = 0.0;
+    let mut prev_pos = start_pos;
+    let mut was_in_water = false;
+    let mut water_entry: Option<Vec2> = None;
 
     // Process each point
     for point in streamline.points.iter().skip(1) {
         let pos = point.position;
-        // Extend the current segment and track its length incrementally
+        let in_water = river.contains_point(pos);
+
+        // Check for water crossing transitions
+        if in_water && !was_in_water {
+            // Entering water
+            if allow_bridges {
+                water_entry = Some(prev_pos);
+            } else {
+                // Minor road - terminate here
+                if segment_points.len() >= 2 {
+                    let end_node = graph.add_node(prev_pos, RoadNodeType::DeadEnd);
+                    if end_node != prev_node {
+                        graph.add_edge(prev_node, end_node, segment_points.clone(), road_type);
+                    }
+                }
+                return; // Stop processing this streamline
+            }
+        } else if !in_water && was_in_water {
+            // Exiting water - create bridge edge if we have entry point
+            if let Some(entry) = water_entry.take() {
+                // Create node at water entry
+                let entry_node = graph.add_node(entry, RoadNodeType::Intersection);
+                if prev_node != entry_node && segment_points.len() >= 2 {
+                    graph.add_edge(prev_node, entry_node, segment_points.clone(), road_type);
+                }
+
+                // Create bridge edge crossing water
+                let exit_node = graph.add_node(pos, RoadNodeType::Intersection);
+                let bridge_points: SmallVec<[Vec2; 8]> = smallvec::smallvec![entry, pos];
+                graph.add_bridge_edge(entry_node, exit_node, bridge_points, road_type, entry, pos);
+
+                prev_node = exit_node;
+                segment_points.clear();
+                segment_points.push(pos);
+                segment_length = 0.0;
+            }
+        }
+
+        was_in_water = in_water;
+        prev_pos = pos;
+
+        // Skip adding points while in water
+        if in_water {
+            continue;
+        }
+
+        // Extend the current segment
         if let Some(last) = segment_points.last() {
             segment_length += last.distance(pos);
         }
@@ -213,7 +287,6 @@ fn add_streamline_to_graph(
 
         // Check segment length - create intermediate nodes for long segments
         if segment_length > config.streamline.separation * 3.0 {
-            // Create intermediate node
             let new_node = graph.add_node(pos, RoadNodeType::Intersection);
             graph.add_edge(prev_node, new_node, segment_points.clone(), road_type);
             prev_node = new_node;
@@ -225,8 +298,10 @@ fn add_streamline_to_graph(
 
     // Final node
     let end_pos = streamline.points.last().unwrap().position;
-    let end_node = graph.snap_or_create(end_pos, snap_dist, RoadNodeType::Endpoint);
-    if end_node != prev_node && segment_points.len() >= 2 {
-        graph.add_edge(prev_node, end_node, segment_points, road_type);
+    if !river.contains_point(end_pos) {
+        let end_node = graph.snap_or_create(end_pos, snap_dist, RoadNodeType::Endpoint);
+        if end_node != prev_node && segment_points.len() >= 2 {
+            graph.add_edge(prev_node, end_node, segment_points, road_type);
+        }
     }
 }

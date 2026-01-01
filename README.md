@@ -14,11 +14,27 @@ Urban Sprawl generates infinite, organic city layouts using tensor field-based r
 
 ## Features
 
+### City Generation
 - **Tensor Field Road Generation** - Organic road networks using grid and radial basis field blending, traced via streamline integration
-- **Procedural Buildings** - Multiple building shapes (box, L-shape, tower-on-base, stepped) with zone-based placement (commercial, residential, industrial)
-- **City Infrastructure** - Sidewalks, lane markings, intersections, street lamps, and traffic lights
-- **Green Spaces** - Parks with procedurally placed trees scattered throughout the city
+- **Procedural Buildings** - Multiple building shapes (box, L-shape, tower-on-base, stepped) with zone-based placement and 5 facade styles (Glass, Brick, Concrete, Metal, Painted)
+- **Water System** - Procedural rivers with meandering paths, animated water shader, and automatic bridge placement
+- **Green Spaces** - Parks with procedurally placed trees and street trees lining sidewalks
+
+### Visual Details
+- **Day/Night Cycle** - Dynamic sun lighting with smooth transitions
+- **Facade-Aware Windows** - Building windows vary by architectural style with night-time illumination
+- **Rooftop Details** - AC units, water towers, antennas on building rooftops
+- **Tilt-Shift Effect** - Post-processing for miniature/diorama aesthetic
+- **Cloud Shadows** - Drifting shadows using procedural noise
+
+### City Life
+- **Moving Vehicles** - Cars driving on roads with traffic light awareness
+- **Pedestrians** - Citizens walking on sidewalks between intersections
+- **Street Furniture** - Lamps, traffic lights, fire hydrants, benches, parked cars
+
+### Technical
 - **Orthographic Camera** - Zoom, pan, and rotate controls for city exploration
+- **Terrain System** - Perlin noise height variation with all objects following terrain
 
 ## Getting Started
 
@@ -42,8 +58,9 @@ First build will take several minutes as Bevy compiles. Subsequent builds are fa
 | Input | Action |
 |-------|--------|
 | WASD / Arrow Keys | Pan camera |
+| Middle/Right Mouse + Drag | Pan camera |
 | Mouse Wheel | Zoom in/out |
-| Middle Mouse + Drag | Rotate camera |
+| Q / E | Rotate camera |
 
 ## Architecture
 
@@ -60,15 +77,30 @@ See [CLAUDE.md](CLAUDE.md) for detailed architectural documentation.
 
 ## Roadmap
 
+### Completed
 - [x] Tensor field road generation
-- [x] Building spawning with shape variety
-- [x] Parks and green spaces
-- [x] Street furniture (lamps, traffic lights)
-- [ ] Vehicle traffic simulation
+- [x] Building spawning with shape variety and facade styles
+- [x] Parks and green spaces with street trees
+- [x] Street furniture (lamps, traffic lights, hydrants, benches)
+- [x] Day/night cycle with dynamic lighting
+- [x] Moving vehicles with traffic light awareness
+- [x] Pedestrians walking on sidewalks
+- [x] Water system with rivers and bridges
+- [x] Facade-aware windows with night illumination
+- [x] Rooftop details (AC units, antennas, water towers)
+- [x] Tilt-shift post-processing effect
+- [x] Cloud shadows
+
+### In Progress
+- [ ] Weather system (fog, rain)
+- [ ] Public transit (buses, trains)
+- [ ] Landmark buildings
+
+### Planned
+- [ ] Full traffic simulation with pathfinding
 - [ ] Citizen agents with daily schedules
-- [ ] Day/night cycle with dynamic lighting
-- [ ] Zoning with Wave Function Collapse
-- [ ] Building interiors
+- [ ] Economic simulation
+- [ ] City growth over time
 
 ## References
 

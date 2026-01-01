@@ -105,6 +105,11 @@ fn generate_road_meshes(
             continue;
         }
 
+        // Skip edges that cross water - bridges handle those
+        if edge.crosses_water {
+            continue;
+        }
+
         let width = match edge.road_type {
             RoadType::Highway => config.highway_width,
             RoadType::Major => config.major_width,

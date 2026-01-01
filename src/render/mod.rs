@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 
+pub mod bridges;
 pub mod building_shadows;
 pub mod building_spawner;
 pub mod cloud_shadows;
@@ -11,10 +12,13 @@ pub mod instancing;
 pub mod parked_cars;
 pub mod road_markings;
 pub mod road_mesh;
+pub mod rooftop_details;
 pub mod street_furniture;
 pub mod street_lamps;
 pub mod street_trees;
+pub mod tilt_shift;
 pub mod traffic_lights;
+pub mod water;
 pub mod window_lights;
 
 pub struct RenderPlugin;
@@ -25,6 +29,7 @@ impl Plugin for RenderPlugin {
             .add_plugins(instancing::InstancingPlugin)
             .add_plugins(road_mesh::RoadMeshPlugin)
             .add_plugins(road_markings::RoadMarkingsPlugin)
+            .add_plugins(bridges::BridgesPlugin)
             .add_plugins(building_spawner::BuildingSpawnerPlugin)
             .add_plugins(building_shadows::BuildingShadowsPlugin)
             .add_plugins(street_lamps::StreetLampsPlugin)
@@ -34,6 +39,9 @@ impl Plugin for RenderPlugin {
             .add_plugins(street_furniture::StreetFurniturePlugin)
             .add_plugins(street_trees::StreetTreesPlugin)
             .add_plugins(window_lights::WindowLightsPlugin)
-            .add_plugins(cloud_shadows::CloudShadowsPlugin);
+            .add_plugins(rooftop_details::RooftopDetailsPlugin)
+            .add_plugins(cloud_shadows::CloudShadowsPlugin)
+            .add_plugins(water::WaterPlugin)
+            .add_plugins(tilt_shift::TiltShiftPlugin);
     }
 }
