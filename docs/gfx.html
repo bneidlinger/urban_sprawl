@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Sprawl: Graphics Efficiency & Realism Report</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Placeholder Comments -->
+    <!-- Chosen Palette: "Slate & Amber" - A technical, clean, warm neutral background (Slate-50) with deep slate text for readability, using Amber-600 for interactions and Blue-600 for data visualization to convey a sense of architectural precision. -->
+    
+    <!-- Application Structure Plan: 
+         1. Header: Context and Navigation.
+         2. Executive Dashboard: High-level metrics summary (simulated current state).
+         3. The "Engine Room" (Interactive Simulator): The core interactive component. Users toggle techniques (Instancing, Occlusion, PBR) to see real-time updates on a "Performance vs. Fidelity" scatter plot and a "Frame Budget" breakdown bar chart. This gamifies the research findings.
+         4. Deep Dive Cards: Detailed text analysis of specific techniques, grouped by "Optimization" and "Realism".
+         5. Pipeline Architecture: A CSS-grid based flow visualizer showing where these techniques fit in the render loop.
+         6. Implementation Roadmap: A timeline view for integrating these changes.
+         This structure moves from high-level impact -> interactive experimentation -> technical details -> execution plan.
+    -->
+
+    <!-- Visualization & Content Choices:
+         - Engine Room Scatter Plot (Chart.js): Goal: Relationship. Shows the trade-off between FPS cost and Visual Gain.
+         - Frame Budget Stacked Bar (Chart.js): Goal: Inform/Compare. Shows how techniques reduce specific bottlenecks (CPU Draw Calls vs GPU Fragment).
+         - Logic: Interactive toggles allow the user to "build" their engine strategy.
+         - NO SVG/Mermaid confirmation: All diagrams use CSS Grid/Flexbox and Unicode icons.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate 50 */
+            color: #334155; /* Slate 700 */
+        }
+        
+        /* Custom Chart Container Styling as per requirements */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+
+        /* Utility for Diagram Nodes */
+        .pipeline-node {
+            transition: all 0.3s ease;
+        }
+        .pipeline-node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* Custom Scrollbar for side panels if needed */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+    </style>
+</head>
+<body class="antialiased flex flex-col min-h-screen">
+
+    <!-- Navigation -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center gap-2">
+                        <span class="text-2xl text-amber-600">◼</span>
+                        <h1 class="font-bold text-xl tracking-tight text-slate-900">Urban Sprawl <span class="font-light text-slate-500">| Tech Research</span></h1>
+                    </div>
+                </div>
+                <div class="hidden sm:flex sm:space-x-8 items-center" id="desktop-nav">
+                    <!-- Nav items injected by JS -->
+                </div>
+                <div class="flex items-center sm:hidden">
+                    <button id="mobile-menu-btn" class="text-slate-500 hover:text-slate-700 focus:outline-none">
+                        <span class="text-2xl">☰</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden sm:hidden bg-white border-b border-slate-200">
+            <div class="px-2 pt-2 pb-3 space-y-1" id="mobile-nav-items">
+                <!-- Mobile items injected by JS -->
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full space-y-12">
+
+        <!-- Section 1: Introduction -->
+        <section id="intro" class="bg-white rounded-lg shadow-sm border border-slate-200 p-6 md:p-8">
+            <div class="max-w-3xl">
+                <h2 class="text-3xl font-bold text-slate-900 mb-4">Graphics Efficiency & Realism Analysis</h2>
+                <p class="text-lg text-slate-600 mb-6 leading-relaxed">
+                    This interactive report analyzes the rendering architecture for the <strong>Urban Sprawl</strong> simulator. 
+                    Given the nature of urban simulation—rendering thousands of repetitive dynamic entities (buildings, vehicles, agents)—the primary bottleneck is typically CPU-side draw call submission. 
+                    The secondary challenge is achieving realism (lighting, shadows) without blowing the GPU budget.
+                </p>
+                <div class="bg-blue-50 border-l-4 border-blue-500 p-4">
+                    <p class="text-sm text-blue-800 font-medium">
+                        <strong>Interactive Dashboard:</strong> Use the "Engine Simulator" below to toggle techniques and visualize their impact on your projected frame budget.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: The Engine Simulator (Interactive Core) -->
+        <section id="simulator" class="scroll-mt-20">
+            <div class="flex flex-col md:flex-row items-baseline justify-between mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-900">Engine Simulator</h3>
+                    <p class="text-slate-500 mt-1 max-w-2xl">
+                        Toggle rendering techniques to see estimated performance gains (FPS) vs. visual fidelity costs. 
+                        Baseline assumes a naive rendering approach (individual draw calls, basic ambient lighting).
+                    </p>
+                </div>
+                <div class="mt-4 md:mt-0 px-4 py-2 bg-slate-100 rounded-full text-sm font-mono text-slate-700">
+                    Target: <span class="font-bold text-green-600">60 FPS</span> @ 1080p
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                <!-- Controls -->
+                <div class="lg:col-span-4 space-y-6">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-slate-200 h-full">
+                        <h4 class="font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                            <span>⚙️</span> Configuration
+                        </h4>
+                        
+                        <!-- Optimization Toggles -->
+                        <div class="space-y-4 mb-8">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Efficiency Modules</p>
+                            
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">GPU Instancing</span>
+                                <input type="checkbox" id="toggle-instancing" class="sim-toggle w-5 h-5 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
+                            </label>
+                            
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">Frustum Culling</span>
+                                <input type="checkbox" id="toggle-culling" class="sim-toggle w-5 h-5 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
+                            </label>
+
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">Texture Atlasing/Arrays</span>
+                                <input type="checkbox" id="toggle-atlasing" class="sim-toggle w-5 h-5 text-amber-600 rounded border-slate-300 focus:ring-amber-500">
+                            </label>
+                        </div>
+
+                        <!-- Realism Toggles -->
+                        <div class="space-y-4">
+                            <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">Realism Modules</p>
+                            
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">PBR Materials</span>
+                                <input type="checkbox" id="toggle-pbr" class="sim-toggle w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                            </label>
+                            
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">Cascaded Shadows</span>
+                                <input type="checkbox" id="toggle-shadows" class="sim-toggle w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                            </label>
+
+                            <label class="flex items-center justify-between cursor-pointer group p-2 hover:bg-slate-50 rounded transition">
+                                <span class="text-sm font-medium text-slate-700">SSAO (Amb. Occlusion)</span>
+                                <input type="checkbox" id="toggle-ssao" class="sim-toggle w-5 h-5 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Visualizations -->
+                <div class="lg:col-span-8 space-y-6">
+                    
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center">
+                            <p class="text-xs text-slate-500 uppercase">Draw Calls</p>
+                            <p id="stat-drawcalls" class="text-2xl font-bold text-slate-900">25,000</p>
+                            <p class="text-xs text-red-500">Critical Load</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center">
+                            <p class="text-xs text-slate-500 uppercase">Est. FPS</p>
+                            <p id="stat-fps" class="text-2xl font-bold text-amber-600">12</p>
+                            <p class="text-xs text-slate-400">Baseline</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 text-center">
+                            <p class="text-xs text-slate-500 uppercase">Visual Score</p>
+                            <p id="stat-visual" class="text-2xl font-bold text-blue-600">2/10</p>
+                            <p class="text-xs text-slate-400">Flat/Dull</p>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Frame Time Chart -->
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                            <h5 class="text-sm font-semibold text-slate-700 mb-4 text-center">Frame Time Budget (ms)</h5>
+                            <div class="chart-container">
+                                <canvas id="frameTimeChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Tradeoff Chart -->
+                        <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                            <h5 class="text-sm font-semibold text-slate-700 mb-4 text-center">Efficiency vs. Realism</h5>
+                            <div class="chart-container">
+                                <canvas id="tradeoffChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Deep Dive Research -->
+        <section id="research" class="scroll-mt-20">
+            <h3 class="text-2xl font-bold text-slate-900 mb-6">Technical Deep Dive</h3>
+            <p class="text-slate-600 mb-8 max-w-4xl">
+                The urban simulator genre presents unique challenges: high entity counts and long draw distances. 
+                Below is the detailed analysis of why specific techniques were selected for the `urban_sprawl` codebase.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Card 1 -->
+                <div class="bg-white rounded-lg shadow-sm border-t-4 border-amber-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Instanced Rendering</h4>
+                    <p class="text-xs text-amber-600 font-bold uppercase mb-3">Priority: Critical</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> Submitting 10,000 distinct `draw()` calls for buildings chokes the CPU driver overhead.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> Group identical meshes (e.g., "Building_Type_A"). Send one draw call with a buffer containing transform matrices for all 500 instances.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Medium</span></span>
+                        <span class="text-green-600 font-semibold">+400% FPS</span>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bg-white rounded-lg shadow-sm border-t-4 border-amber-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Texture Arrays</h4>
+                    <p class="text-xs text-amber-600 font-bold uppercase mb-3">Priority: High</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> Cities have diverse textures. Switching textures breaks batching/instancing.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> Load all building textures into a `Texture2DArray`. Pass a texture index in the instance data. Allows rendering *different* looking buildings in the *same* draw call.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Hard</span></span>
+                        <span class="text-green-600 font-semibold">Enables Batching</span>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="bg-white rounded-lg shadow-sm border-t-4 border-blue-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Cascaded Shadow Maps</h4>
+                    <p class="text-xs text-blue-600 font-bold uppercase mb-3">Realism: High</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> Standard shadow maps look pixelated for huge city scales.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> Render shadows into 3-4 "cascades" (layers). High res for close buildings, low res for distant skyscrapers. Essential for "Golden Hour" city shots.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Hard</span></span>
+                        <span class="text-red-500 font-semibold">-15% FPS</span>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="bg-white rounded-lg shadow-sm border-t-4 border-blue-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Screen Space AO (SSAO)</h4>
+                    <p class="text-xs text-blue-600 font-bold uppercase mb-3">Realism: Medium</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> City streets look flat; geometry doesn't feel grounded.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> A post-process pass that calculates occlusion based on the depth buffer. Adds soft shadows in corners/alleys, drastically improving depth perception.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Easy</span></span>
+                        <span class="text-red-500 font-semibold">-5% FPS</span>
+                    </div>
+                </div>
+                 <!-- Card 5 -->
+                 <div class="bg-white rounded-lg shadow-sm border-t-4 border-amber-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Impostors / LOD</h4>
+                    <p class="text-xs text-amber-600 font-bold uppercase mb-3">Priority: Medium</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> Rendering full geometry for a house 2km away is wasteful.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> Render distant buildings as simple cubes or even 2D billboards (impostors) facing the camera.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Medium</span></span>
+                        <span class="text-green-600 font-semibold">+50% FPS</span>
+                    </div>
+                </div>
+                 <!-- Card 6 -->
+                 <div class="bg-white rounded-lg shadow-sm border-t-4 border-blue-500 p-6 hover:shadow-md transition">
+                    <h4 class="text-lg font-bold text-slate-900 mb-2">Deferred Rendering</h4>
+                    <p class="text-xs text-blue-600 font-bold uppercase mb-3">Arch Change</p>
+                    <p class="text-sm text-slate-600 mb-4">
+                        <strong>Problem:</strong> Forward rendering slows down with many street lights.
+                    </p>
+                    <p class="text-sm text-slate-600">
+                        <strong>Solution:</strong> Separate geometry pass (G-Buffer) from lighting pass. Allows for hundreds of dynamic street lights with consistent performance.
+                    </p>
+                    <div class="mt-4 pt-4 border-t border-slate-100 flex justify-between text-xs">
+                        <span class="text-slate-500">Implementation: <span class="font-semibold text-slate-800">Very Hard</span></span>
+                        <span class="text-slate-500 font-semibold">Scale w/ Lights</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Render Pipeline Flow -->
+        <section id="pipeline" class="bg-white p-6 md:p-8 rounded-lg shadow-sm border border-slate-200 scroll-mt-20">
+            <h3 class="text-2xl font-bold text-slate-900 mb-6">Proposed Render Pipeline</h3>
+            <p class="text-slate-600 mb-8">
+                Visualizing where the optimizations fit into the frame execution.
+            </p>
+
+            <div class="relative">
+                <!-- CSS Grid Pipeline -->
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 text-center">
+                    
+                    <!-- Stage 1 -->
+                    <div class="pipeline-node p-4 bg-slate-50 border-2 border-slate-200 rounded-lg">
+                        <div class="text-2xl mb-2">🎲</div>
+                        <h4 class="font-bold text-slate-800 text-sm">Simulation Step</h4>
+                        <p class="text-xs text-slate-500 mt-2">Update entities<br>Physics</p>
+                    </div>
+
+                    <!-- Arrow -->
+                    <div class="hidden md:flex items-center justify-center text-slate-300 text-2xl">➔</div>
+
+                    <!-- Stage 2 -->
+                    <div class="pipeline-node p-4 bg-amber-50 border-2 border-amber-200 rounded-lg relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-amber-200 text-amber-800 text-[10px] px-1 font-bold">HOT</div>
+                        <div class="text-2xl mb-2">📂</div>
+                        <h4 class="font-bold text-slate-800 text-sm">Culling & Batching</h4>
+                        <p class="text-xs text-slate-500 mt-2">Frustum Check<br>Instance Buffers</p>
+                    </div>
+
+                    <!-- Arrow -->
+                    <div class="hidden md:flex items-center justify-center text-slate-300 text-2xl">➔</div>
+
+                    <!-- Stage 3 -->
+                    <div class="pipeline-node p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                        <div class="text-2xl mb-2">🎨</div>
+                        <h4 class="font-bold text-slate-800 text-sm">G-Buffer Pass</h4>
+                        <p class="text-xs text-slate-500 mt-2">Albedo, Normal,<br>Depth, Roughness</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 text-center mt-4 md:mt-8">
+                    <!-- Spacer -->
+                     <div class="hidden md:block"></div>
+                     <div class="hidden md:block"></div>
+                     
+                     <!-- Stage 4 -->
+                    <div class="pipeline-node p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                        <div class="text-2xl mb-2">💡</div>
+                        <h4 class="font-bold text-slate-800 text-sm">Lighting Pass</h4>
+                        <p class="text-xs text-slate-500 mt-2">Shadow Maps<br>PBR Calculation</p>
+                    </div>
+
+                    <!-- Arrow -->
+                    <div class="hidden md:flex items-center justify-center text-slate-300 text-2xl">➔</div>
+
+                     <!-- Stage 5 -->
+                     <div class="pipeline-node p-4 bg-purple-50 border-2 border-purple-200 rounded-lg">
+                        <div class="text-2xl mb-2">✨</div>
+                        <h4 class="font-bold text-slate-800 text-sm">Post-Process</h4>
+                        <p class="text-xs text-slate-500 mt-2">SSAO, Bloom,<br>Tone Mapping</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Roadmap -->
+        <section id="roadmap" class="scroll-mt-20">
+            <h3 class="text-2xl font-bold text-slate-900 mb-6">Implementation Roadmap</h3>
+            <div class="space-y-4">
+                
+                <!-- Phase 1 -->
+                <div class="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow-sm border-l-4 border-slate-400">
+                    <div class="md:w-32 flex-shrink-0">
+                        <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold">Phase 1</span>
+                        <p class="text-xs text-slate-400 mt-2">Weeks 1-3</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-900">Foundation & Cleanup</h4>
+                        <p class="text-sm text-slate-600 mt-1">Implement Instanced Rendering for static meshes. Refactor rendering loop to separate simulation logic from draw submission.</p>
+                    </div>
+                </div>
+
+                <!-- Phase 2 -->
+                <div class="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow-sm border-l-4 border-amber-500">
+                    <div class="md:w-32 flex-shrink-0">
+                        <span class="bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-xs font-bold">Phase 2</span>
+                        <p class="text-xs text-slate-400 mt-2">Weeks 4-6</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-900">Efficiency Systems</h4>
+                        <p class="text-sm text-slate-600 mt-1">Implement Texture Arrays to allow batching different buildings. Add Frustum Culling system (Octree or Grid-based).</p>
+                    </div>
+                </div>
+
+                <!-- Phase 3 -->
+                <div class="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500">
+                    <div class="md:w-32 flex-shrink-0">
+                        <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold">Phase 3</span>
+                        <p class="text-xs text-slate-400 mt-2">Weeks 7-10</p>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-slate-900">Realism & Atmosphere</h4>
+                        <p class="text-sm text-slate-600 mt-1">Integrate Cascaded Shadow Maps. Implement PBR shader pipeline. Add SSAO post-processing pass.</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 mt-12 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-400 text-sm">Generated Analysis for <strong>urban_sprawl</strong> codebase.</p>
+        </div>
+    </footer>
+
+    <!-- Logic Script -->
+    <script>
+        // --- Navigation Logic ---
+        const navLinks = [
+            { id: 'intro', label: 'Overview' },
+            { id: 'simulator', label: 'Simulator' },
+            { id: 'research', label: 'Deep Dive' },
+            { id: 'pipeline', label: 'Pipeline' },
+            { id: 'roadmap', label: 'Roadmap' },
+        ];
+
+        const desktopNav = document.getElementById('desktop-nav');
+        const mobileNavItems = document.getElementById('mobile-nav-items');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+
+        navLinks.forEach(link => {
+            // Desktop
+            const a = document.createElement('a');
+            a.href = `#${link.id}`;
+            a.className = "text-slate-500 hover:text-slate-900 px-3 py-2 rounded-md text-sm font-medium transition-colors";
+            a.textContent = link.label;
+            desktopNav.appendChild(a);
+
+            // Mobile
+            const am = document.createElement('a');
+            am.href = `#${link.id}`;
+            am.className = "block px-3 py-2 rounded-md text-base font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-50";
+            am.textContent = link.label;
+            am.onclick = () => mobileMenu.classList.add('hidden');
+            mobileNavItems.appendChild(am);
+        });
+
+        mobileMenuBtn.onclick = () => {
+            mobileMenu.classList.toggle('hidden');
+        };
+
+        // --- Simulator State Management ---
+        const state = {
+            instancing: false,
+            culling: false,
+            atlasing: false,
+            pbr: false,
+            shadows: false,
+            ssao: false
+        };
+
+        // Constants for simulation
+        const BASE_DRAW_CALLS = 25000;
+        const BASE_CPU_MS = 60; // Huge bottleneck
+        const BASE_GPU_MS = 10;
+        const BASE_VISUAL = 2;
+
+        // --- Chart.js Instances ---
+        let frameTimeChartInstance = null;
+        let tradeoffChartInstance = null;
+
+        function initCharts() {
+            // 1. Frame Time Budget Chart (Stacked Bar)
+            const ctx1 = document.getElementById('frameTimeChart').getContext('2d');
+            frameTimeChartInstance = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Current Config'],
+                    datasets: [
+                        { label: 'CPU (Draw Calls)', data: [BASE_CPU_MS], backgroundColor: '#fbbf24' }, // Amber 400
+                        { label: 'GPU (Rendering)', data: [BASE_GPU_MS], backgroundColor: '#3b82f6' }   // Blue 500
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { 
+                            stacked: true, 
+                            title: { display: true, text: 'Milliseconds (Lower is Better)' },
+                            max: 100 
+                        },
+                        y: { stacked: true }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + context.raw + 'ms';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 2. Efficiency vs Realism Scatter
+            const ctx2 = document.getElementById('tradeoffChart').getContext('2d');
+            tradeoffChartInstance = new Chart(ctx2, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Simulated State',
+                        data: [{ x: 12, y: 2 }], // Starting FPS, Visual Score
+                        backgroundColor: '#0f172a',
+                        pointRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Performance (FPS)' },
+                            min: 0, max: 120 
+                        },
+                        y: { 
+                            title: { display: true, text: 'Visual Fidelity Score (1-10)' },
+                            min: 0, max: 10 
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `FPS: ${Math.round(ctx.raw.x)}, Quality: ${ctx.raw.y}/10`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Core Simulation Logic ---
+        function updateSimulation() {
+            // Read Toggles
+            state.instancing = document.getElementById('toggle-instancing').checked;
+            state.culling = document.getElementById('toggle-culling').checked;
+            state.atlasing = document.getElementById('toggle-atlasing').checked;
+            state.pbr = document.getElementById('toggle-pbr').checked;
+            state.shadows = document.getElementById('toggle-shadows').checked;
+            state.ssao = document.getElementById('toggle-ssao').checked;
+
+            // Calculate Metrics
+            let currentCpuMs = BASE_CPU_MS;
+            let currentGpuMs = BASE_GPU_MS;
+            let currentVisual = BASE_VISUAL;
+            let currentDrawCalls = BASE_DRAW_CALLS;
+
+            // --- Optimization Effects (Reduce CPU Time, Reduce Draw Calls) ---
+            
+            // Instancing: Massive Draw Call reduction
+            if (state.instancing) {
+                currentDrawCalls *= 0.1; // 90% reduction
+                currentCpuMs *= 0.2;     // Huge CPU savings
+            }
+
+            // Atlasing: Enables better batching (only effective if instancing or batching is largely active, simplified here)
+            if (state.atlasing) {
+                currentDrawCalls *= 0.7; 
+                currentCpuMs *= 0.8;
+            }
+
+            // Culling: Reduces GPU load (less geometry) AND CPU (less submission if CPU culled)
+            if (state.culling) {
+                currentDrawCalls *= 0.6; 
+                currentGpuMs *= 0.7; // GPU processes less vertices
+                currentCpuMs *= 0.9;
+            }
+
+            // --- Realism Effects (Increase GPU Time, Increase Visual Score) ---
+            
+            if (state.pbr) {
+                currentGpuMs += 4; // Shader complexity
+                currentVisual += 3;
+            }
+
+            if (state.shadows) {
+                currentGpuMs += 8; // Render geometry multiple times for shadow maps
+                currentVisual += 3;
+            }
+
+            if (state.ssao) {
+                currentGpuMs += 3; // Post process
+                currentVisual += 2;
+            }
+
+            // Clamp Visual
+            if (currentVisual > 10) currentVisual = 10;
+
+            // Calculate FPS
+            const totalFrameTime = currentCpuMs + currentGpuMs;
+            // Add slight overhead buffer
+            const fps = Math.min(144, Math.floor(1000 / totalFrameTime));
+
+            // --- Update DOM ---
+            const drawCallEl = document.getElementById('stat-drawcalls');
+            drawCallEl.innerText = Math.floor(currentDrawCalls).toLocaleString();
+            drawCallEl.nextElementSibling.innerText = currentDrawCalls > 5000 ? "High Load" : "Optimized";
+            drawCallEl.nextElementSibling.className = currentDrawCalls > 5000 ? "text-xs text-red-500" : "text-xs text-green-600";
+
+            const fpsEl = document.getElementById('stat-fps');
+            fpsEl.innerText = fps;
+            fpsEl.className = fps >= 60 ? "text-2xl font-bold text-green-600" : (fps >= 30 ? "text-2xl font-bold text-amber-600" : "text-2xl font-bold text-red-600");
+
+            const visualEl = document.getElementById('stat-visual');
+            visualEl.innerText = currentVisual + "/10";
+
+            // --- Update Charts ---
+            
+            // Stacked Bar
+            frameTimeChartInstance.data.datasets[0].data = [currentCpuMs];
+            frameTimeChartInstance.data.datasets[1].data = [currentGpuMs];
+            frameTimeChartInstance.update();
+
+            // Scatter
+            tradeoffChartInstance.data.datasets[0].data = [{ x: fps, y: currentVisual }];
+            
+            // Color code the point based on "Sweet Spot" (High FPS + High Visual)
+            if (fps >= 60 && currentVisual >= 7) {
+                tradeoffChartInstance.data.datasets[0].backgroundColor = '#16a34a'; // Green
+            } else if (fps < 30) {
+                tradeoffChartInstance.data.datasets[0].backgroundColor = '#dc2626'; // Red
+            } else {
+                tradeoffChartInstance.data.datasets[0].backgroundColor = '#d97706'; // Amber
+            }
+            
+            tradeoffChartInstance.update();
+        }
+
+        // Attach Listeners
+        document.querySelectorAll('.sim-toggle').forEach(toggle => {
+            toggle.addEventListener('change', updateSimulation);
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            initCharts();
+            updateSimulation(); // Run once to set initial state
+        });
+
+    </script>
+</body>
+</html>

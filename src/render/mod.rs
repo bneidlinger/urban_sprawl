@@ -19,6 +19,7 @@ pub mod street_trees;
 pub mod tilt_shift;
 pub mod traffic_lights;
 pub mod water;
+pub mod weather;
 pub mod window_lights;
 
 pub struct RenderPlugin;
@@ -42,6 +43,7 @@ impl Plugin for RenderPlugin {
             .add_plugins(rooftop_details::RooftopDetailsPlugin)
             .add_plugins(cloud_shadows::CloudShadowsPlugin)
             .add_plugins(water::WaterPlugin)
+            .add_plugins(weather::WeatherPlugin)
             .add_plugins(tilt_shift::TiltShiftPlugin);
     }
 }

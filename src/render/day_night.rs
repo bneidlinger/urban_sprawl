@@ -384,7 +384,8 @@ fn update_fog(
     }
 }
 
-fn fog_profile(hour: f32, config: &DayNightConfig) -> (Color, f32) {
+/// Get fog color and density for a given hour (public for weather system).
+pub fn fog_profile(hour: f32, config: &DayNightConfig) -> (Color, f32) {
     if hour >= 5.0 && hour < 7.0 {
         // Dawn
         let t = (hour - 5.0) / 2.0;
@@ -422,7 +423,8 @@ fn fog_profile(hour: f32, config: &DayNightConfig) -> (Color, f32) {
     }
 }
 
-fn lerp_color(a: Color, b: Color, t: f32) -> Color {
+/// Linearly interpolate between two colors in linear RGB space.
+pub fn lerp_color(a: Color, b: Color, t: f32) -> Color {
     let a_linear = a.to_linear();
     let b_linear = b.to_linear();
 
@@ -433,6 +435,7 @@ fn lerp_color(a: Color, b: Color, t: f32) -> Color {
     )
 }
 
-fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
+/// Linearly interpolate between two scalar values.
+pub fn lerp_scalar(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
