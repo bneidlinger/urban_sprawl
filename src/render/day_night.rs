@@ -114,26 +114,26 @@ pub struct DayNightConfig {
 impl Default for DayNightConfig {
     fn default() -> Self {
         Self {
-            sun_intensity_day: 100000.0,
+            sun_intensity_day: 90000.0,
             sun_intensity_night: 500.0,
 
-            ambient_day: Color::srgb(0.4, 0.45, 0.5),
+            ambient_day: Color::srgb(0.33, 0.37, 0.4),
             ambient_night: Color::srgb(0.02, 0.03, 0.08),
-            ambient_dawn: Color::srgb(0.5, 0.35, 0.3),
-            ambient_dusk: Color::srgb(0.6, 0.35, 0.25),
+            ambient_dawn: Color::srgb(0.44, 0.32, 0.28),
+            ambient_dusk: Color::srgb(0.46, 0.32, 0.26),
 
-            sky_day: Color::srgb(0.5, 0.7, 0.9),
-            sky_dawn: Color::srgb(0.9, 0.6, 0.4),
-            sky_dusk: Color::srgb(0.9, 0.4, 0.3),
+            sky_day: Color::srgb(0.45, 0.64, 0.78),
+            sky_dawn: Color::srgb(0.85, 0.6, 0.45),
+            sky_dusk: Color::srgb(0.84, 0.46, 0.34),
             sky_night: Color::srgb(0.02, 0.02, 0.05),
 
-            fog_color_day: Color::srgba(0.65, 0.73, 0.8, 0.9),
-            fog_color_dawn: Color::srgba(0.82, 0.58, 0.46, 0.95),
-            fog_color_dusk: Color::srgba(0.76, 0.45, 0.4, 0.95),
+            fog_color_day: Color::srgba(0.72, 0.78, 0.85, 0.9),
+            fog_color_dawn: Color::srgba(0.78, 0.58, 0.48, 0.95),
+            fog_color_dusk: Color::srgba(0.74, 0.47, 0.42, 0.95),
             fog_color_night: Color::srgba(0.05, 0.08, 0.12, 0.9),
-            fog_density_day: 0.0015,
-            fog_density_dawn: 0.0025,
-            fog_density_dusk: 0.0025,
+            fog_density_day: 0.0009,
+            fog_density_dawn: 0.0015,
+            fog_density_dusk: 0.0015,
             fog_density_night: 0.001,
             fog_directional_color: Color::srgba(1.0, 0.82, 0.6, 0.35),
             fog_directional_exponent: 18.0,
@@ -277,8 +277,8 @@ fn update_sun_position(
             // Dawn/dusk - warm orange
             light.color = Color::srgb(1.0, 0.7 + transition * 0.3, 0.5 + transition * 0.5);
         } else {
-            // Day - white
-            light.color = Color::WHITE;
+            // Day - slightly warm to match real sunlight
+            light.color = Color::srgb(1.0, 0.98, 0.93);
         }
     }
 
