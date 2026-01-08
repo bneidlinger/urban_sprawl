@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IsoCitySim - A large-scale isometric city simulator built with Bevy (Rust ECS) targeting 100,000+ active entities with procedural generation.
+Urban Sprawl - A large-scale procedural city simulator built with Bevy (Rust ECS) targeting 100,000+ rendered entities at 60 FPS with GPU-driven rendering.
 
 ## Build Commands
 
@@ -25,12 +25,14 @@ cargo clippy             # Run linter
 
 All game systems are organized as Bevy plugins registered in `main.rs`:
 
+- **GameStatePlugin** (`game_state.rs`) - Game state machine (MainMenu/Loading/Playing/Paused) and game modes (Sandbox/Procedural)
+- **ToolsPlugin** (`tools/`) - Player interaction tools: zone painting, road drawing, demolish, service placement
 - **CameraPlugin** (`camera/`) - Orthographic camera with zoom/pan/rotate
-- **RenderPlugin** (`render/`) - Mesh generation, instancing, visual elements
+- **RenderPlugin** (`render/`) - Mesh generation, instancing, GPU-driven rendering
 - **ProcgenPlugin** (`procgen/`) - Procedural city generation pipeline
-- **SimulationPlugin** (`simulation/`) - Agent behavior, traffic (scaffolded)
-- **WorldPlugin** (`world/`) - Spatial partitioning, terrain (scaffolded)
-- **UiPlugin** (`ui/`) - Debug overlays and gizmos
+- **SimulationPlugin** (`simulation/`) - Economy, demand, population, traffic, services
+- **WorldPlugin** (`world/`) - Spatial partitioning, terrain
+- **UiPlugin** (`ui/`) - Debug overlays, toolbox, stats bar
 
 ### Procedural Generation Pipeline
 
@@ -66,22 +68,57 @@ RoadsGenerated    // Marker resource (bool) signaling roads complete
 BuildingsSpawned  // Marker resource (bool) signaling buildings spawned
 ```
 
+### GPU-Driven Rendering Pipeline
+
+The rendering system uses a multi-stage GPU-driven approach:
+
+1. **MeshPoolsPlugin** - Shared mesh/material pools to reduce draw calls
+2. **BuildingInstancesPlugin** - Hardware instancing with 112-byte instance data
+3. **FacadeTexturesPlugin** - Procedural 5-layer texture arrays (Brick/Concrete/Glass/Metal/Painted)
+4. **GpuCullingPlugin** - Compute shader frustum culling with CPU fallback
+5. **HzbPlugin** - Hierarchical depth buffer for occlusion culling
+6. **ClusteredShadingPlugin** - 16x9x24 cluster grid for 5,000+ dynamic lights
+
+Culling pipeline: Frustum cull (~50% rejected) → HZB occlusion cull → Indirect draw
+
 ### Rendering Sub-Plugins
 
-The `RenderPlugin` composes multiple sub-plugins:
-- **DayNightPlugin** - Lighting with sun direction (time-based when implemented)
-- **InstancingPlugin** - Custom material for GPU instancing (disabled by default)
+The `RenderPlugin` composes sub-plugins in dependency order:
+- **DayNightPlugin** - Time-of-day lighting with sun direction
+- **WeatherPlugin** - Fog, rain, wet surfaces, weather state cycling
 - **RoadMeshPlugin** - Road/sidewalk/intersection geometry
-- **RoadMarkingsPlugin** - Lane lines and road markings
 - **BuildingSpawnerPlugin** - Building meshes with zone-based styling
-- **StreetLampsPlugin**, **TrafficLightsPlugin** - Street furniture
-- **CrosswalksPlugin**, **ParkedCarsPlugin**, **StreetFurniturePlugin**, **WindowLightsPlugin** - Details
+- **WindowInstancesPlugin** - Batched window rendering (320,000+ potential entities)
+- **ClusteredShadingPlugin** - Many-light management for street lamps, traffic lights, windows
+- **TiltShiftPlugin** - Post-processing for miniature/diorama effect
+
+### Simulation Systems
+
+The `SimulationPlugin` runs city simulation at 20 Hz (decoupled from render):
+- **DemandPlugin** - SimCity-style RCI demand meters
+- **ZoneGrowthPlugin** - Buildings grow from zones based on demand/land value
+- **PopulationPlugin** - Citizens move based on housing, jobs, services
+- **EconomyPlugin** - Tax income, maintenance costs, budgets
+- **LandValuePlugin** - Composite score (pollution, crime, services, commute)
+- **ServiceCoveragePlugin** - Police/Fire/Hospital/School coverage effects
+- **CommutePlugin** - Traffic calculation affecting happiness
+
+### Player Tools
+
+`ActiveTool` state enum controls current interaction mode:
+- `ZonePaint(ZoneType)` - Paint Residential/Commercial/Industrial zones
+- `RoadDraw` - Click to place road nodes with auto-connect
+- `Demolish` - Remove buildings and clear zones
+- `PlaceService(ServiceType)` - Place Police/Fire/Hospital/School/Park
+- `Query` - Inspect objects
 
 ### Entity Components
 
-- `Building` - Building entity with lot_index and BuildingType (Residential/Commercial/Industrial)
-- `Park`, `Tree` - Green space markers
-- `StreetLamp`, `TrafficLight` - Infrastructure markers
+Key marker components:
+- `Building` - Building with lot_index, BuildingType, FacadeStyle
+- `GpuCullable` - Registers entity for GPU frustum culling
+- `DynamicCityLight` - Time-of-day controlled light intensity
+- `StreetLamp`, `TrafficLight` - Street furniture markers
 
 ### Building Shapes
 
@@ -93,18 +130,21 @@ Buildings spawn with varied shapes based on zone type:
 
 ## Architectural Constraints
 
-### ECS Only
+### ECS Patterns
 - All logic as Bevy Systems, NO OOP inheritance
 - Data in Components, global state in Resources
+- Use marker resources + `run_if` conditions to sequence generation stages
 - Use query filters for efficient iteration
 
 ### Rendering
-- Hardware instancing for city geometry
+- Hardware instancing for city geometry (112-byte instance data)
 - True 3D with orthographic projection (not SpriteBundle)
 - CCW triangle winding for proper backface culling
+- Register cullable objects with `GpuCullable` component
 
 ### Performance Targets
 - 100,000+ rendered instances at 60 FPS
+- 5,000+ dynamic point lights via clustered shading
 - Simulation tick rate: 20 Hz (decoupled from render)
 
 ### Prohibited Patterns

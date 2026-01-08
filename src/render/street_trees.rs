@@ -6,6 +6,7 @@ use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 use crate::procgen::roads::{RoadGraph, RoadType};
+use crate::render::gpu_culling::GpuCullable;
 use crate::render::instancing::TerrainConfig;
 use crate::render::road_mesh::RoadMeshGenerated;
 
@@ -14,15 +15,20 @@ pub struct StreetTreesPlugin;
 impl Plugin for StreetTreesPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<StreetTreeConfig>()
+            .init_resource::<StreetTreesSpawned>()
             .add_systems(Update, spawn_street_trees.run_if(should_spawn_trees));
     }
 }
 
+/// Marker that street trees have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct StreetTreesSpawned(pub bool);
+
 fn should_spawn_trees(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    tree_query: Query<&StreetTree>,
+    spawned: Res<StreetTreesSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && tree_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 /// Marker component for street trees.
@@ -71,6 +77,7 @@ fn spawn_street_trees(
     terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<StreetTreesSpawned>,
 ) {
     info!("Spawning street trees...");
 
@@ -150,12 +157,14 @@ fn spawn_street_trees(
 
                 // Spawn trunk
                 let trunk_y = terrain_height + tree_height / 2.0;
+                let trunk_radius = (tree_height / 2.0).max(config.trunk_radius);
                 commands.spawn((
                     Mesh3d(trunk_mesh.clone()),
                     MeshMaterial3d(trunk_material.clone()),
                     Transform::from_xyz(tree_pos.x, trunk_y, tree_pos.y)
                         .with_scale(Vec3::new(1.0, tree_height, 1.0)),
                     StreetTree,
+                    GpuCullable::new(trunk_radius),
                 ));
 
                 // Spawn foliage (sphere on top of trunk)
@@ -166,6 +175,7 @@ fn spawn_street_trees(
                     Transform::from_xyz(tree_pos.x, foliage_y, tree_pos.y)
                         .with_scale(Vec3::splat(foliage_size)),
                     StreetTree,
+                    GpuCullable::new(foliage_size),
                 ));
 
                 tree_count += 1;
@@ -176,6 +186,7 @@ fn spawn_street_trees(
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} street trees", tree_count);
 }
 

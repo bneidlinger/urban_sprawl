@@ -1,11 +1,13 @@
 //! Debug UI and visualization tools.
 
 use bevy::{
-    diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
+    diagnostic::{DiagnosticsStore, EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin},
     prelude::*,
 };
 
 use crate::render::day_night::TimeOfDay;
+use crate::render::gpu_culling::CullStats;
+use crate::render::building_spawner::Building;
 use crate::simulation::SimulationConfig;
 
 pub mod debug_render;
@@ -21,6 +23,7 @@ impl Plugin for UiPlugin {
             .add_plugins(toolbox::ToolboxPlugin)
             .add_plugins(stats_bar::StatsBarPlugin)
             .add_plugins(FrameTimeDiagnosticsPlugin::default())
+            .add_plugins(EntityCountDiagnosticsPlugin::default())
             .add_plugins(debug_render::DebugRenderPlugin)
             .init_resource::<DebugConfig>()
             .add_systems(Startup, setup_hud)
@@ -28,6 +31,7 @@ impl Plugin for UiPlugin {
                 Update,
                 (
                     update_fps_counter,
+                    update_frame_stats,
                     update_time_display,
                     update_sim_status,
                     handle_time_controls,
@@ -74,6 +78,10 @@ struct DebugInfoText;
 /// Marker for simulation status text.
 #[derive(Component)]
 struct SimStatusText;
+
+/// Marker for frame stats text (entities, draw calls, culling).
+#[derive(Component)]
+struct FrameStatsText;
 
 fn setup_hud(mut commands: Commands) {
     let panel_bg = Color::srgb(0.04, 0.05, 0.06);
@@ -146,6 +154,26 @@ fn setup_hud(mut commands: Commands) {
                 TextColor(Color::srgb(0.7, 0.8, 0.7)),
                 DebugInfoText,
             ));
+
+            // Frame stats section
+            parent.spawn((
+                Text::new("--- RENDER STATS ---"),
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(retro_orange),
+            ));
+
+            parent.spawn((
+                Text::new("Entities: -- | Meshes: -- | Culled: --"),
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(Color::srgb(0.6, 0.9, 0.7)),
+                FrameStatsText,
+            ));
         });
 
     // Bottom control reminder
@@ -180,6 +208,39 @@ fn update_fps_counter(
                 **text = format!("FPS: {:.0}", value);
             }
         }
+    }
+}
+
+/// Update frame stats display with entity counts, mesh counts, and culling info.
+fn update_frame_stats(
+    diagnostics: Res<DiagnosticsStore>,
+    cull_stats: Res<CullStats>,
+    mesh_query: Query<&Mesh3d>,
+    building_query: Query<&Building>,
+    mut query: Query<&mut Text, With<FrameStatsText>>,
+) {
+    // Get total entity count from diagnostics
+    let entity_count = diagnostics
+        .get(&EntityCountDiagnosticsPlugin::ENTITY_COUNT)
+        .and_then(|d| d.value())
+        .unwrap_or(0.0) as usize;
+
+    // Count meshes (approximate draw calls)
+    let mesh_count = mesh_query.iter().count();
+
+    // Count buildings specifically
+    let building_count = building_query.iter().count();
+
+    // Culling stats
+    let visible = cull_stats.visible_objects;
+    let culled = cull_stats.culled_objects;
+    let cull_pct = cull_stats.cull_ratio * 100.0;
+
+    for mut text in &mut query {
+        **text = format!(
+            "Ent: {} | Mesh: {} | Bldg: {} | Vis: {} | Cull: {} ({:.0}%)",
+            entity_count, mesh_count, building_count, visible, culled, cull_pct
+        );
     }
 }
 

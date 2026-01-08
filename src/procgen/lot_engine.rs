@@ -3,12 +3,17 @@
 //! Consumes the buildable lots discovered between roads and annotates them
 //! with zoning, density, and environmental context. The intent is to provide
 //! a predictable-yet-randomized plan that later systems can use to spawn
-#![allow(dead_code)]
 //! buildings, parks, or civic spaces.
+//!
+//! Only runs in Procedural mode - Sandbox mode uses player-painted zones instead.
+
+#![allow(dead_code)]
 
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
 use rand::{rngs::StdRng, Rng, SeedableRng};
+
+use crate::game_state::GameMode;
 
 use super::block_extractor::CityLots;
 use super::parcels::Lot;
@@ -101,8 +106,13 @@ pub struct LotPlans {
     pub generated: bool,
 }
 
-fn should_plan_lots(lots: Res<CityLots>, plans: Res<LotPlans>) -> bool {
-    !lots.lots.is_empty() && !plans.generated
+fn should_plan_lots(
+    lots: Res<CityLots>,
+    plans: Res<LotPlans>,
+    game_mode: Res<State<GameMode>>,
+) -> bool {
+    // Only plan lots in Procedural mode - Sandbox uses player zones
+    *game_mode.get() == GameMode::Procedural && !lots.lots.is_empty() && !plans.generated
 }
 
 fn plan_open_space_lots(

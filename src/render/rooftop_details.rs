@@ -18,12 +18,17 @@ pub struct RooftopDetailsPlugin;
 impl Plugin for RooftopDetailsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RooftopDetailConfig>()
+            .init_resource::<RooftopDetailsSpawned>()
             .add_systems(Update, spawn_rooftop_details.run_if(should_spawn_details));
     }
 }
 
-fn should_spawn_details(spawned: Res<BuildingsSpawned>, detail_query: Query<&RooftopDetail>) -> bool {
-    spawned.0 && detail_query.is_empty()
+/// Marker resource to prevent rooftop system from running multiple times.
+#[derive(Resource, Default)]
+pub struct RooftopDetailsSpawned(pub bool);
+
+fn should_spawn_details(spawned: Res<BuildingsSpawned>, details_spawned: Res<RooftopDetailsSpawned>) -> bool {
+    spawned.0 && !details_spawned.0
 }
 
 /// Marker for all rooftop details.
@@ -81,18 +86,22 @@ fn spawn_rooftop_details(
     building_query: Query<(&Building, &Transform, &Mesh3d), With<Building>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut details_spawned: ResMut<RooftopDetailsSpawned>,
 ) {
+    // Mark as spawned immediately to prevent re-runs
+    details_spawned.0 = true;
+
     info!("Spawning rooftop details...");
 
     let mut rng = StdRng::seed_from_u64(config.seed);
 
-    // Pre-create meshes
-    let ac_unit_mesh = meshes.add(Cuboid::new(1.0, 0.6, 0.8));
-    let ac_unit_top_mesh = meshes.add(Cuboid::new(0.9, 0.05, 0.7)); // Grille on top
-    let water_tower_tank_mesh = meshes.add(Cylinder::new(1.0, 2.5));
-    let water_tower_leg_mesh = meshes.add(Cylinder::new(0.08, 3.0));
-    let antenna_mesh = meshes.add(Cylinder::new(0.04, 1.0)); // Will be scaled per-building
-    let helipad_mesh = meshes.add(Cylinder::new(3.0, 0.1));
+    // Pre-create meshes - larger sizes for visibility at city scale
+    let ac_unit_mesh = meshes.add(Cuboid::new(2.5, 1.5, 2.0));  // Bigger AC units
+    let ac_unit_top_mesh = meshes.add(Cuboid::new(2.3, 0.1, 1.8)); // Grille on top
+    let water_tower_tank_mesh = meshes.add(Cylinder::new(2.0, 4.0));  // Bigger water tower
+    let water_tower_leg_mesh = meshes.add(Cylinder::new(0.15, 5.0));
+    let antenna_mesh = meshes.add(Cylinder::new(0.08, 1.0)); // Will be scaled per-building
+    let helipad_mesh = meshes.add(Cylinder::new(5.0, 0.15));
 
     // Materials
     let ac_unit_material = materials.add(StandardMaterial {
@@ -140,21 +149,32 @@ fn spawn_rooftop_details(
     let mut antenna_count = 0;
     let mut helipad_count = 0;
 
+    // Diagnostic counters
+    let mut mesh_not_found = 0;
+    let mut aabb_not_found = 0;
+    let mut too_small = 0;
+    let building_count = building_query.iter().count();
+
     for (building, transform, mesh_handle) in building_query.iter() {
         let Some(mesh) = meshes.get(&mesh_handle.0) else {
+            mesh_not_found += 1;
             continue;
         };
 
         let Some(aabb) = mesh.compute_aabb() else {
+            aabb_not_found += 1;
             continue;
         };
 
-        let building_height = aabb.half_extents.y * 2.0;
-        let building_width = aabb.half_extents.x * 2.0;
-        let building_depth = aabb.half_extents.z * 2.0;
+        // Apply transform scale to get world-space dimensions
+        let scale = transform.scale;
+        let building_height = aabb.half_extents.y * 2.0 * scale.y;
+        let building_width = aabb.half_extents.x * 2.0 * scale.x;
+        let building_depth = aabb.half_extents.z * 2.0 * scale.z;
 
-        // Skip very small buildings
-        if building_height < 6.0 || building_width < 4.0 || building_depth < 4.0 {
+        // Skip very small buildings (lowered thresholds for more coverage)
+        if building_height < 4.0 || building_width < 3.0 || building_depth < 3.0 {
+            too_small += 1;
             continue;
         }
 
@@ -194,7 +214,7 @@ fn spawn_rooftop_details(
             && building.building_type == BuildingArchetype::Residential
             && (building.facade_style == FacadeStyle::Brick
                 || building.facade_style == FacadeStyle::Painted)
-            && building_height >= 6.0 // At least 2 floors
+            && building_height >= 4.0 // At least ~1.5 floors
             && rng.gen::<f32>() < config.water_tower_probability
         {
             // Place in a corner
@@ -209,24 +229,24 @@ fn spawn_rooftop_details(
                 pos.z - usable_depth / 2.0 + 1.5
             };
 
-            let leg_height = 3.0;
+            let leg_height = 5.0;
             let tank_bottom = rooftop_y + leg_height;
 
-            // Tank
+            // Tank (bigger, more visible)
             commands.spawn((
                 Mesh3d(water_tower_tank_mesh.clone()),
                 MeshMaterial3d(water_tower_material.clone()),
-                Transform::from_xyz(corner_x, tank_bottom + 1.25, corner_z),
+                Transform::from_xyz(corner_x, tank_bottom + 2.0, corner_z),
                 RooftopDetail,
                 WaterTower,
             ));
 
-            // 4 legs
+            // 4 legs (wider spacing for bigger tank)
             let leg_offsets = [
-                (0.6, 0.6),
-                (0.6, -0.6),
-                (-0.6, 0.6),
-                (-0.6, -0.6),
+                (1.2, 1.2),
+                (1.2, -1.2),
+                (-1.2, 1.2),
+                (-1.2, -1.2),
             ];
             for (dx, dz) in leg_offsets {
                 commands.spawn((
@@ -261,20 +281,20 @@ fn spawn_rooftop_details(
                     let offset_z = rng.gen_range(-usable_depth / 2.0..usable_depth / 2.0);
                     let test_pos = Vec2::new(offset_x, offset_z);
 
-                    // Check spacing from other AC units
+                    // Check spacing from other AC units (bigger units need more spacing)
                     let too_close = placed_positions
                         .iter()
-                        .any(|p| p.distance(test_pos) < 2.0);
+                        .any(|p| p.distance(test_pos) < 4.0);
 
                     if !too_close {
                         let ac_x = pos.x + offset_x;
                         let ac_z = pos.z + offset_z;
 
-                        // AC unit body
+                        // AC unit body (centered, so offset by half height)
                         commands.spawn((
                             Mesh3d(ac_unit_mesh.clone()),
                             MeshMaterial3d(ac_unit_material.clone()),
-                            Transform::from_xyz(ac_x, rooftop_y + 0.3, ac_z),
+                            Transform::from_xyz(ac_x, rooftop_y + 0.75, ac_z),
                             RooftopDetail,
                             ACUnit,
                         ));
@@ -283,7 +303,7 @@ fn spawn_rooftop_details(
                         commands.spawn((
                             Mesh3d(ac_unit_top_mesh.clone()),
                             MeshMaterial3d(ac_unit_grille_material.clone()),
-                            Transform::from_xyz(ac_x, rooftop_y + 0.62, ac_z),
+                            Transform::from_xyz(ac_x, rooftop_y + 1.55, ac_z),
                             RooftopDetail,
                         ));
 
@@ -327,8 +347,29 @@ fn spawn_rooftop_details(
         }
     }
 
+    // Log skip reasons
+    if mesh_not_found > 0 || aabb_not_found > 0 || too_small > 0 {
+        info!(
+            "Rooftop skipped: {} mesh not found, {} no AABB, {} too small (of {} buildings)",
+            mesh_not_found, aabb_not_found, too_small, building_count
+        );
+    }
+
     info!(
         "Spawned rooftop details: {} AC units, {} water towers, {} antennas, {} helipads",
         ac_count, water_tower_count, antenna_count, helipad_count
+    );
+
+    // Debug: count eligible residential buildings
+    let residential_brick_painted = building_query
+        .iter()
+        .filter(|(b, _, _)| {
+            b.building_type == BuildingArchetype::Residential
+                && (b.facade_style == FacadeStyle::Brick || b.facade_style == FacadeStyle::Painted)
+        })
+        .count();
+    info!(
+        "Residential buildings with Brick/Painted facade: {}",
+        residential_brick_painted
     );
 }

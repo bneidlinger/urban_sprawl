@@ -1,4 +1,9 @@
 //! Building spawner that generates varied buildings on city lots.
+//!
+//! This module has been updated to use GPU instancing for efficient rendering
+//! of thousands of buildings with minimal draw calls.
+//!
+//! Only runs in Procedural mode - Sandbox mode uses player-painted zones instead.
 
 #![allow(dead_code)]
 
@@ -7,10 +12,16 @@ use noise::{NoiseFn, Perlin};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
+use crate::game_state::GameMode;
 use crate::procgen::building_factory::{
     BuildingArchetype, BuildingBlueprints, BuildingShape, FacadeStyle, PlannedStructure,
 };
+use crate::render::building_instances::{
+    BuildingInstanceBuffer, BuildingInstanceData, BuildingMaterialPalette, BuildingRef,
+};
+use crate::render::gpu_culling::GpuCullable;
 use crate::render::instancing::TerrainConfig;
+use crate::render::mesh_pools::{BuildingMeshPool, VegetationMeshPool};
 
 pub struct BuildingSpawnerPlugin;
 
@@ -25,8 +36,10 @@ impl Plugin for BuildingSpawnerPlugin {
 fn should_spawn_buildings(
     blueprints: Res<BuildingBlueprints>,
     spawned: Res<BuildingsSpawned>,
+    game_mode: Res<State<GameMode>>,
 ) -> bool {
-    blueprints.generated && !spawned.0
+    // Only spawn procedural buildings in Procedural mode - Sandbox uses player zones
+    *game_mode.get() == GameMode::Procedural && blueprints.generated && !spawned.0
 }
 
 #[derive(Resource, Default)]
@@ -55,43 +68,23 @@ fn spawn_buildings(
     blueprints: Res<BuildingBlueprints>,
     config: Res<BuildingConfig>,
     terrain_config: Res<TerrainConfig>,
+    mesh_pool: Res<BuildingMeshPool>,
+    vegetation_pool: Res<VegetationMeshPool>,
+    palette: Res<BuildingMaterialPalette>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut instance_buffer: ResMut<BuildingInstanceBuffer>,
     mut spawned: ResMut<BuildingsSpawned>,
 ) {
-    info!("Spawning {} planned structures...", blueprints.plans.len());
+    info!(
+        "Spawning {} planned structures with GPU instancing...",
+        blueprints.plans.len()
+    );
 
     let terrain = TerrainSampler::new(&terrain_config);
     let mut rng = StdRng::seed_from_u64(config.seed);
 
-    // Facade palettes chosen to emphasize zone/type variety.
-    let brick_colors = [
-        Color::srgb(0.74, 0.48, 0.38),
-        Color::srgb(0.68, 0.42, 0.32),
-        Color::srgb(0.8, 0.54, 0.42),
-    ];
-    let concrete_colors = [
-        Color::srgb(0.65, 0.65, 0.65),
-        Color::srgb(0.72, 0.72, 0.72),
-        Color::srgb(0.58, 0.6, 0.62),
-    ];
-    let glass_colors = [
-        Color::srgb(0.4, 0.6, 0.75),
-        Color::srgb(0.35, 0.55, 0.7),
-        Color::srgb(0.45, 0.65, 0.8),
-    ];
-    let metal_colors = [
-        Color::srgb(0.55, 0.55, 0.58),
-        Color::srgb(0.5, 0.5, 0.52),
-        Color::srgb(0.48, 0.5, 0.55),
-    ];
-    let painted_colors = [
-        Color::srgb(0.85, 0.78, 0.62),
-        Color::srgb(0.92, 0.86, 0.72),
-        Color::srgb(0.76, 0.82, 0.72),
-    ];
-
-    // Park materials
+    // Park materials (still use standard spawning for now)
     let grass_material = materials.add(StandardMaterial {
         base_color: Color::srgb(0.3, 0.55, 0.25),
         perceptual_roughness: 0.95,
@@ -117,8 +110,12 @@ fn spawn_buildings(
     })
     .collect();
 
-    let trunk_mesh = meshes.add(Cylinder::new(0.3, 1.0));
-    let foliage_mesh = meshes.add(Sphere::new(1.0));
+    // Clear existing instance buffer
+    instance_buffer.clear();
+
+    // Count buildings and parks for logging
+    let mut building_count = 0;
+    let mut park_count = 0;
 
     for plan in &blueprints.plans {
         match plan {
@@ -129,305 +126,560 @@ fn spawn_buildings(
                     &mut meshes,
                     &grass_material,
                     &trunk_material,
-                    &trunk_mesh,
+                    &vegetation_pool.trunk_mesh,
                     &foliage_materials,
-                    &foliage_mesh,
+                    &vegetation_pool.foliage_mesh,
                     park.center,
                     park.size,
                     terrain_height,
                     &mut rng,
                 );
+                park_count += 1;
             }
             PlannedStructure::Building(plan) => {
-                let material = match plan.facade {
-                    FacadeStyle::Brick => materials.add(StandardMaterial {
-                        base_color: brick_colors[rng.gen_range(0..brick_colors.len())],
-                        perceptual_roughness: 0.9,
-                        metallic: 0.0,
-                        ..default()
-                    }),
-                    FacadeStyle::Concrete => materials.add(StandardMaterial {
-                        base_color: concrete_colors[rng.gen_range(0..concrete_colors.len())],
-                        perceptual_roughness: 0.85,
-                        metallic: 0.0,
-                        ..default()
-                    }),
-                    FacadeStyle::Glass => materials.add(StandardMaterial {
-                        base_color: glass_colors[rng.gen_range(0..glass_colors.len())],
-                        perceptual_roughness: 0.2,
-                        metallic: 0.1,
-                        ..default()
-                    }),
-                    FacadeStyle::Metal => materials.add(StandardMaterial {
-                        base_color: metal_colors[rng.gen_range(0..metal_colors.len())],
-                        perceptual_roughness: 0.35,
-                        metallic: 0.6,
-                        ..default()
-                    }),
-                    FacadeStyle::Painted => materials.add(StandardMaterial {
-                        base_color: painted_colors[rng.gen_range(0..painted_colors.len())],
-                        perceptual_roughness: 0.75,
-                        metallic: 0.0,
-                        ..default()
-                    }),
-                };
+                // Get shared material from palette (enables GPU instancing!)
+                let color_variant = rng.gen_range(0..3);
+                let material = palette.get(plan.facade, color_variant)
+                    .expect("Material palette not initialized");
+                let color = BuildingMaterialPalette::get_color(plan.facade, color_variant);
 
                 // Sample terrain height at building center
                 let terrain_height = terrain.sample(plan.center.x, plan.center.y);
 
-                // Spawn building based on shape
-                match plan.shape {
-                    BuildingShape::Box => {
-                        spawn_box_building(
-                            &mut commands,
-                            &mut meshes,
-                            material,
-                            plan.center,
-                            plan.footprint,
-                            plan.height,
-                            terrain_height,
-                            plan.lot_index,
-                            plan.building_type,
-                            plan.facade,
-                        );
-                    }
-                    BuildingShape::LShape => {
-                        spawn_l_building(
-                            &mut commands,
-                            &mut meshes,
-                            material,
-                            plan.center,
-                            plan.footprint,
-                            plan.height,
-                            terrain_height,
-                            &mut rng,
-                            plan.lot_index,
-                            plan.building_type,
-                            plan.facade,
-                        );
-                    }
-                    BuildingShape::TowerOnBase => {
-                        spawn_tower_building(
-                            &mut commands,
-                            &mut meshes,
-                            &mut materials,
-                            material,
-                            plan.center,
-                            plan.footprint,
-                            plan.height,
-                            terrain_height,
-                            &mut rng,
-                            plan.lot_index,
-                            plan.building_type,
-                            plan.facade,
-                        );
-                    }
-                    BuildingShape::Stepped => {
-                        spawn_stepped_building(
-                            &mut commands,
-                            &mut meshes,
-                            material,
-                            plan.center,
-                            plan.footprint,
-                            plan.height,
-                            terrain_height,
-                            &mut rng,
-                            plan.lot_index,
-                            plan.building_type,
-                            plan.facade,
-                        );
-                    }
-                }
+                // Create instance data and add to buffer
+                let instance_index = spawn_building_instanced(
+                    &mut commands,
+                    &mut instance_buffer,
+                    &mesh_pool,
+                    &palette,
+                    material.clone(),  // Use shared material!
+                    plan.center,
+                    plan.footprint,
+                    plan.height,
+                    terrain_height,
+                    color,
+                    plan.facade,
+                    plan.building_type,
+                    plan.shape,
+                    plan.lot_index,
+                    &mut rng,
+                );
+
+                // Spawn lightweight entity for ECS queries (no mesh, just reference)
+                commands.spawn(BuildingRef {
+                    lot_index: plan.lot_index,
+                    instance_index,
+                    archetype: plan.building_type,
+                    facade: plan.facade,
+                    shape: plan.shape,
+                });
+
+                building_count += 1;
             }
         }
     }
 
+    // Update instance buffer stats
+    instance_buffer.update_stats();
+    instance_buffer.dirty = true;
+
     spawned.0 = true;
-    info!("Buildings spawned");
+    info!(
+        "Spawned {} buildings ({} instances) and {} parks",
+        building_count,
+        instance_buffer.stats.total_instances,
+        park_count
+    );
+    info!(
+        "Instance breakdown: {} box, {} L-shape, {} tower, {} stepped",
+        instance_buffer.stats.box_count,
+        instance_buffer.stats.l_shape_count,
+        instance_buffer.stats.tower_count,
+        instance_buffer.stats.stepped_count
+    );
 }
 
-fn spawn_box_building(
+/// Spawn a building using instanced rendering.
+/// Returns the instance index in the buffer.
+fn spawn_building_instanced(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
+    instance_buffer: &mut BuildingInstanceBuffer,
+    mesh_pool: &BuildingMeshPool,
+    palette: &BuildingMaterialPalette,
+    material: Handle<StandardMaterial>,  // Use pre-created shared material
+    center: Vec2,
+    size: Vec2,
+    height: f32,
+    terrain_height: f32,
+    color: Color,
+    facade: FacadeStyle,
+    archetype: BuildingArchetype,
+    shape: BuildingShape,
+    lot_index: usize,
+    rng: &mut StdRng,
+) -> usize {
+    match shape {
+        BuildingShape::Box => {
+            // Simple box building - single instance
+            let position = Vec3::new(center.x, terrain_height + height / 2.0, center.y);
+            let scale = Vec3::new(size.x, height, size.y);
+
+            let instance = BuildingInstanceData::new(
+                position,
+                scale,
+                Quat::IDENTITY,
+                color,
+                facade,
+                archetype,
+                shape,
+                lot_index,
+            );
+
+            // Spawn with shared material (enables Bevy's automatic GPU instancing)
+            spawn_box_building_with_material(
+                commands,
+                mesh_pool.box_mesh.clone(),
+                material.clone(),
+                center,
+                size,
+                height,
+                terrain_height,
+                facade,
+                lot_index,
+                archetype,
+            );
+
+            instance_buffer.add(instance)
+        }
+        BuildingShape::LShape => {
+            // L-shape uses two instances (main wing + side wing)
+            let wing_ratio = 0.4 + rng.gen::<f32>() * 0.2;
+
+            // Main wing
+            let main_size = Vec2::new(size.x, size.y * wing_ratio);
+            let main_offset = Vec2::new(0.0, (size.y - main_size.y) / 2.0);
+            let main_pos = Vec3::new(
+                center.x + main_offset.x,
+                terrain_height + height / 2.0,
+                center.y + main_offset.y,
+            );
+            let main_scale = Vec3::new(main_size.x, height, main_size.y);
+
+            let main_instance = BuildingInstanceData::new(
+                main_pos,
+                main_scale,
+                Quat::IDENTITY,
+                color,
+                facade,
+                archetype,
+                shape,
+                lot_index,
+            );
+            let main_idx = instance_buffer.add(main_instance);
+
+            // Side wing
+            let side_size = Vec2::new(size.x * wing_ratio, size.y - main_size.y + 1.0);
+            let side_x = if rng.gen::<bool>() {
+                center.x - (size.x - side_size.x) / 2.0
+            } else {
+                center.x + (size.x - side_size.x) / 2.0
+            };
+            let side_z = center.y - main_size.y / 2.0;
+            let side_pos = Vec3::new(side_x, terrain_height + height / 2.0, side_z);
+            let side_scale = Vec3::new(side_size.x, height, side_size.y);
+
+            let side_instance = BuildingInstanceData::new(
+                side_pos,
+                side_scale,
+                Quat::IDENTITY,
+                color,
+                facade,
+                archetype,
+                shape,
+                lot_index,
+            );
+            instance_buffer.add(side_instance);
+
+            // Spawn L-shape using shared materials (two boxes)
+            spawn_l_building_with_material(
+                commands,
+                mesh_pool.box_mesh.clone(),
+                material.clone(),
+                center,
+                size,
+                height,
+                terrain_height,
+                facade,
+                lot_index,
+                archetype,
+                wing_ratio,
+                rng.gen::<bool>(),
+            );
+
+            main_idx
+        }
+        BuildingShape::TowerOnBase => {
+            // Tower on base - two instances (podium + tower)
+            let base_height = 4.0 + rng.gen::<f32>() * 4.0;
+
+            // Base podium
+            let base_pos = Vec3::new(center.x, terrain_height + base_height / 2.0, center.y);
+            let base_scale = Vec3::new(size.x, base_height, size.y);
+
+            let base_instance = BuildingInstanceData::new(
+                base_pos,
+                base_scale,
+                Quat::IDENTITY,
+                color,
+                facade,
+                archetype,
+                shape,
+                lot_index,
+            );
+            let base_idx = instance_buffer.add(base_instance);
+
+            // Tower on top
+            let tower_ratio = 0.5 + rng.gen::<f32>() * 0.2;
+            let tower_size = size * tower_ratio;
+            let tower_height = height - base_height;
+
+            if tower_height > 2.0 {
+                let tower_pos = Vec3::new(
+                    center.x,
+                    terrain_height + base_height + tower_height / 2.0,
+                    center.y,
+                );
+                let tower_scale = Vec3::new(tower_size.x, tower_height, tower_size.y);
+
+                // Slightly different color for tower
+                let tower_color = Color::srgb(0.5, 0.55, 0.65);
+
+                let tower_instance = BuildingInstanceData::new(
+                    tower_pos,
+                    tower_scale,
+                    Quat::IDENTITY,
+                    tower_color,
+                    FacadeStyle::Glass,
+                    archetype,
+                    shape,
+                    lot_index,
+                );
+                instance_buffer.add(tower_instance);
+            }
+
+            // Get glass material for tower from palette
+            let tower_material = palette.get(FacadeStyle::Glass, rng.gen_range(0..3))
+                .expect("Material palette not initialized");
+
+            // Spawn with shared materials (enables GPU instancing)
+            spawn_tower_building_with_material(
+                commands,
+                mesh_pool.box_mesh.clone(),
+                material.clone(),
+                tower_material,
+                center,
+                size,
+                height,
+                terrain_height,
+                facade,
+                lot_index,
+                archetype,
+                base_height,
+                tower_ratio,
+            );
+
+            base_idx
+        }
+        BuildingShape::Stepped => {
+            // Stepped building - multiple instances
+            let num_steps = 2 + rng.gen_range(0..2);
+            let step_height = height / num_steps as f32;
+            let mut first_idx = 0;
+
+            for i in 0..num_steps {
+                let shrink = 1.0 - (i as f32 * 0.15);
+                let step_size = size * shrink;
+                let y = terrain_height + step_height * i as f32 + step_height / 2.0;
+
+                let step_pos = Vec3::new(center.x, y, center.y);
+                let step_scale = Vec3::new(step_size.x, step_height, step_size.y);
+
+                let step_instance = BuildingInstanceData::new(
+                    step_pos,
+                    step_scale,
+                    Quat::IDENTITY,
+                    color,
+                    facade,
+                    archetype,
+                    shape,
+                    lot_index,
+                );
+
+                let idx = instance_buffer.add(step_instance);
+                if i == 0 {
+                    first_idx = idx;
+                }
+            }
+
+            // Spawn with shared material (enables GPU instancing)
+            spawn_stepped_building_with_material(
+                commands,
+                mesh_pool.box_mesh.clone(),
+                material.clone(),
+                center,
+                size,
+                height,
+                terrain_height,
+                facade,
+                lot_index,
+                archetype,
+                num_steps,
+            );
+
+            first_idx
+        }
+    }
+}
+
+/// Calculate bounding sphere radius from building dimensions.
+/// Uses the diagonal of the bounding box as the sphere diameter.
+fn calculate_bounding_radius(width: f32, height: f32, depth: f32) -> f32 {
+    (width * width + height * height + depth * depth).sqrt() / 2.0
+}
+
+/// Spawn a box building using a shared material (enables GPU instancing).
+fn spawn_box_building_with_material(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     center: Vec2,
     size: Vec2,
     height: f32,
     terrain_height: f32,
+    facade: FacadeStyle,
     lot_index: usize,
     building_type: BuildingArchetype,
-    facade_style: FacadeStyle,
 ) {
-    let mesh = meshes.add(Cuboid::new(size.x, height, size.y));
+    let bounding_radius = calculate_bounding_radius(size.x, height, size.y);
     commands.spawn((
         Mesh3d(mesh),
         MeshMaterial3d(material),
-        Transform::from_xyz(center.x, terrain_height + height / 2.0, center.y),
+        Transform::from_xyz(center.x, terrain_height + height / 2.0, center.y)
+            .with_scale(Vec3::new(size.x, height, size.y)),
         Building {
             lot_index,
             building_type,
-            facade_style,
+            facade_style: facade,
         },
+        GpuCullable::new(bounding_radius),
     ));
 }
 
-fn spawn_l_building(
+/// Spawn a box building using standard materials (legacy - creates unique material).
+#[allow(dead_code)]
+fn spawn_box_building_standard(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
+    mesh: Handle<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    center: Vec2,
+    size: Vec2,
+    height: f32,
+    terrain_height: f32,
+    color: Color,
+    facade: FacadeStyle,
+    lot_index: usize,
+    building_type: BuildingArchetype,
+) {
+    let (roughness, metallic) = get_facade_material_params(facade);
+    let material = materials.add(StandardMaterial {
+        base_color: color,
+        perceptual_roughness: roughness,
+        metallic,
+        ..default()
+    });
+
+    let bounding_radius = calculate_bounding_radius(size.x, height, size.y);
+    commands.spawn((
+        Mesh3d(mesh),
+        MeshMaterial3d(material),
+        Transform::from_xyz(center.x, terrain_height + height / 2.0, center.y)
+            .with_scale(Vec3::new(size.x, height, size.y)),
+        Building {
+            lot_index,
+            building_type,
+            facade_style: facade,
+        },
+        GpuCullable::new(bounding_radius),
+    ));
+}
+
+/// Spawn an L-shaped building using shared material (enables GPU instancing).
+fn spawn_l_building_with_material(
+    commands: &mut Commands,
+    mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     center: Vec2,
     size: Vec2,
     height: f32,
     terrain_height: f32,
-    rng: &mut StdRng,
+    facade: FacadeStyle,
     lot_index: usize,
     building_type: BuildingArchetype,
-    facade_style: FacadeStyle,
+    wing_ratio: f32,
+    side_left: bool,
 ) {
-    // L-shape: two overlapping rectangles
-    let wing_ratio = 0.4 + rng.gen::<f32>() * 0.2; // 40-60% of size
-
     // Main wing
     let main_size = Vec2::new(size.x, size.y * wing_ratio);
-    let main_mesh = meshes.add(Cuboid::new(main_size.x, height, main_size.y));
     let main_offset = Vec2::new(0.0, (size.y - main_size.y) / 2.0);
+    let main_radius = calculate_bounding_radius(main_size.x, height, main_size.y);
 
     commands.spawn((
-        Mesh3d(main_mesh),
+        Mesh3d(mesh.clone()),
         MeshMaterial3d(material.clone()),
         Transform::from_xyz(
             center.x + main_offset.x,
             terrain_height + height / 2.0,
             center.y + main_offset.y,
-        ),
+        )
+        .with_scale(Vec3::new(main_size.x, height, main_size.y)),
         Building {
             lot_index,
             building_type,
-            facade_style,
+            facade_style: facade,
         },
+        GpuCullable::new(main_radius),
     ));
 
     // Side wing
     let side_size = Vec2::new(size.x * wing_ratio, size.y - main_size.y + 1.0);
-    let side_mesh = meshes.add(Cuboid::new(side_size.x, height, side_size.y));
-
-    // Rotate L randomly
-    let side_x = if rng.gen::<bool>() {
+    let side_x = if side_left {
         center.x - (size.x - side_size.x) / 2.0
     } else {
         center.x + (size.x - side_size.x) / 2.0
     };
     let side_z = center.y - main_size.y / 2.0;
+    let side_radius = calculate_bounding_radius(side_size.x, height, side_size.y);
 
     commands.spawn((
-        Mesh3d(side_mesh),
+        Mesh3d(mesh),
         MeshMaterial3d(material),
-        Transform::from_xyz(side_x, terrain_height + height / 2.0, side_z),
+        Transform::from_xyz(side_x, terrain_height + height / 2.0, side_z)
+            .with_scale(Vec3::new(side_size.x, height, side_size.y)),
         Building {
             lot_index,
             building_type,
-            facade_style,
+            facade_style: facade,
         },
+        GpuCullable::new(side_radius),
     ));
 }
 
-fn spawn_tower_building(
+/// Spawn a tower building using shared materials (enables GPU instancing).
+fn spawn_tower_building_with_material(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
-    material: Handle<StandardMaterial>,
+    mesh: Handle<Mesh>,
+    base_material: Handle<StandardMaterial>,
+    tower_material: Handle<StandardMaterial>,
     center: Vec2,
     size: Vec2,
     height: f32,
     terrain_height: f32,
-    rng: &mut StdRng,
+    facade: FacadeStyle,
     lot_index: usize,
     building_type: BuildingArchetype,
-    facade_style: FacadeStyle,
+    base_height: f32,
+    tower_ratio: f32,
 ) {
     // Base podium
-    let base_height = 4.0 + rng.gen::<f32>() * 4.0;
-    let base_mesh = meshes.add(Cuboid::new(size.x, base_height, size.y));
-
+    let base_radius = calculate_bounding_radius(size.x, base_height, size.y);
     commands.spawn((
-        Mesh3d(base_mesh),
-        MeshMaterial3d(material.clone()),
-        Transform::from_xyz(center.x, terrain_height + base_height / 2.0, center.y),
+        Mesh3d(mesh.clone()),
+        MeshMaterial3d(base_material),
+        Transform::from_xyz(center.x, terrain_height + base_height / 2.0, center.y)
+            .with_scale(Vec3::new(size.x, base_height, size.y)),
         Building {
             lot_index,
             building_type,
-            facade_style,
+            facade_style: facade,
         },
+        GpuCullable::new(base_radius),
     ));
 
-    // Tower on top
-    let tower_ratio = 0.5 + rng.gen::<f32>() * 0.2;
+    // Tower
     let tower_size = size * tower_ratio;
     let tower_height = height - base_height;
 
     if tower_height > 2.0 {
-        let tower_mesh = meshes.add(Cuboid::new(tower_size.x, tower_height, tower_size.y));
-
-        // Slightly different shade for tower
-        let tower_material = materials.add(StandardMaterial {
-            base_color: Color::srgb(0.5, 0.55, 0.65),
-            perceptual_roughness: 0.2,
-            metallic: 0.3,
-            ..default()
-        });
+        let tower_radius = calculate_bounding_radius(tower_size.x, tower_height, tower_size.y);
 
         commands.spawn((
-            Mesh3d(tower_mesh),
+            Mesh3d(mesh),
             MeshMaterial3d(tower_material),
             Transform::from_xyz(
                 center.x,
                 terrain_height + base_height + tower_height / 2.0,
                 center.y,
-            ),
+            )
+            .with_scale(Vec3::new(tower_size.x, tower_height, tower_size.y)),
             Building {
                 lot_index,
                 building_type,
-                facade_style,
+                facade_style: FacadeStyle::Glass, // Tower is always glass
             },
+            GpuCullable::new(tower_radius),
         ));
     }
 }
 
-fn spawn_stepped_building(
+/// Spawn a stepped building using shared material (enables GPU instancing).
+fn spawn_stepped_building_with_material(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
+    mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     center: Vec2,
     size: Vec2,
     height: f32,
     terrain_height: f32,
-    rng: &mut StdRng,
+    facade: FacadeStyle,
     lot_index: usize,
     building_type: BuildingArchetype,
-    facade_style: FacadeStyle,
+    num_steps: usize,
 ) {
-    let num_steps = 2 + rng.gen_range(0..2);
     let step_height = height / num_steps as f32;
 
     for i in 0..num_steps {
         let shrink = 1.0 - (i as f32 * 0.15);
         let step_size = size * shrink;
         let y = terrain_height + step_height * i as f32 + step_height / 2.0;
-
-        let step_mesh = meshes.add(Cuboid::new(step_size.x, step_height, step_size.y));
+        let step_radius = calculate_bounding_radius(step_size.x, step_height, step_size.y);
 
         commands.spawn((
-            Mesh3d(step_mesh),
+            Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
-            Transform::from_xyz(center.x, y, center.y),
+            Transform::from_xyz(center.x, y, center.y)
+                .with_scale(Vec3::new(step_size.x, step_height, step_size.y)),
             Building {
                 lot_index,
                 building_type,
-                facade_style,
+                facade_style: facade,
             },
+            GpuCullable::new(step_radius),
         ));
     }
 }
+
+/// Get material parameters for a facade style.
+fn get_facade_material_params(facade: FacadeStyle) -> (f32, f32) {
+    match facade {
+        FacadeStyle::Brick => (0.9, 0.0),
+        FacadeStyle::Concrete => (0.85, 0.0),
+        FacadeStyle::Glass => (0.2, 0.1),
+        FacadeStyle::Metal => (0.35, 0.6),
+        FacadeStyle::Painted => (0.75, 0.0),
+    }
+}
+
+// Old spawn functions removed - now using shared meshes via _standard variants
 
 /// Marker for park entities.
 #[derive(Component)]

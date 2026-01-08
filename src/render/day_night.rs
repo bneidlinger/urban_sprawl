@@ -114,29 +114,32 @@ pub struct DayNightConfig {
 impl Default for DayNightConfig {
     fn default() -> Self {
         Self {
-            sun_intensity_day: 90000.0,
-            sun_intensity_night: 500.0,
+            sun_intensity_day: 100000.0,
+            sun_intensity_night: 80.0, // Very dim moonlight
 
-            ambient_day: Color::srgb(0.33, 0.37, 0.4),
-            ambient_night: Color::srgb(0.02, 0.03, 0.08),
-            ambient_dawn: Color::srgb(0.44, 0.32, 0.28),
-            ambient_dusk: Color::srgb(0.46, 0.32, 0.26),
+            // Clean ambient colors - night is nearly black
+            ambient_day: Color::srgb(0.4, 0.42, 0.45),
+            ambient_night: Color::srgb(0.005, 0.008, 0.02), // Nearly black with blue tint
+            ambient_dawn: Color::srgb(0.35, 0.25, 0.2),     // Warmer dawn
+            ambient_dusk: Color::srgb(0.38, 0.22, 0.18),    // Warmer dusk
 
-            sky_day: Color::srgb(0.45, 0.64, 0.78),
-            sky_dawn: Color::srgb(0.85, 0.6, 0.45),
-            sky_dusk: Color::srgb(0.84, 0.46, 0.34),
-            sky_night: Color::srgb(0.02, 0.02, 0.05),
+            // Rich sky colors - night is true black
+            sky_day: Color::srgb(0.53, 0.72, 0.88),
+            sky_dawn: Color::srgb(0.92, 0.55, 0.35),
+            sky_dusk: Color::srgb(0.88, 0.38, 0.28),
+            sky_night: Color::srgb(0.003, 0.005, 0.012), // Near black
 
-            fog_color_day: Color::srgba(0.72, 0.78, 0.85, 0.9),
-            fog_color_dawn: Color::srgba(0.78, 0.58, 0.48, 0.95),
-            fog_color_dusk: Color::srgba(0.74, 0.47, 0.42, 0.95),
-            fog_color_night: Color::srgba(0.05, 0.08, 0.12, 0.9),
-            fog_density_day: 0.0009,
-            fog_density_dawn: 0.0015,
-            fog_density_dusk: 0.0015,
-            fog_density_night: 0.001,
-            fog_directional_color: Color::srgba(1.0, 0.82, 0.6, 0.35),
-            fog_directional_exponent: 18.0,
+            // Minimal fog at night to let city lights dominate
+            fog_color_day: Color::srgba(0.75, 0.82, 0.9, 0.6),
+            fog_color_dawn: Color::srgba(0.65, 0.45, 0.35, 0.5),
+            fog_color_dusk: Color::srgba(0.6, 0.35, 0.3, 0.5),
+            fog_color_night: Color::srgba(0.01, 0.012, 0.03, 0.15), // Nearly transparent night fog
+            fog_density_day: 0.0004,    // Light daytime fog
+            fog_density_dawn: 0.0005,   // Subtle dawn mist
+            fog_density_dusk: 0.0004,   // Subtle dusk haze
+            fog_density_night: 0.00008, // Barely visible night fog
+            fog_directional_color: Color::srgba(1.0, 0.9, 0.7, 0.25),
+            fog_directional_exponent: 12.0,
         }
     }
 }
@@ -331,7 +334,24 @@ fn update_ambient_light(
     };
 
     ambient.color = color;
-    ambient.brightness = if tod.is_night() { 50.0 } else { 300.0 };
+
+    // Smooth brightness transition - nearly black at night so point lights dominate
+    let hour = tod.hour();
+    ambient.brightness = if hour >= 6.0 && hour < 8.0 {
+        // Dawn - ramping up from darkness
+        let t = (hour - 6.0) / 2.0;
+        5.0 + t * 295.0
+    } else if hour >= 8.0 && hour < 17.0 {
+        // Day - full brightness
+        300.0
+    } else if hour >= 17.0 && hour < 20.0 {
+        // Dusk - ramping down to darkness
+        let t = (hour - 17.0) / 3.0;
+        300.0 - t * 295.0
+    } else {
+        // Night - nearly black ambient (point lights and neon signs are the only illumination)
+        5.0
+    };
 }
 
 fn update_sky_color(

@@ -44,6 +44,15 @@ The project targets 100,000+ rendered entities at 60 FPS using Bevy's ECS archit
 - **Rooftop Details** - AC units, water towers, antennas
 - **Tilt-Shift Effect** - Post-processing for miniature/diorama aesthetic
 - **Cloud Shadows** - Drifting shadows using procedural noise
+- **Weather System** - Dynamic fog, rain, wet surfaces with auto-cycling between Clear/Foggy/Rainy/Stormy
+
+### GPU-Driven Rendering
+- **Hardware Instancing** - Batched rendering for city geometry with 112-byte instance data
+- **Clustered Shading** - 16x9x24 cluster grid supporting 5,000+ dynamic point lights at 60 FPS
+- **GPU Frustum Culling** - Compute shader culling with bounding sphere tests against 6 frustum planes
+- **HZB Occlusion Culling** - Hierarchical depth buffer for depth-based occlusion rejection
+- **Procedural Texture Arrays** - 5-layer facade textures (Brick, Concrete, Glass, Metal, Painted)
+- **Window Instancing** - Batched window rendering reducing 320,000+ potential entities
 
 ### City Life
 - **Moving Vehicles** - Cars driving on roads with traffic light awareness
@@ -83,6 +92,9 @@ First build will take several minutes as Bevy compiles. Subsequent builds are fa
 | P | Pause simulation |
 | [ / ] | Slow down / Speed up time |
 | 1-4 | Time presets (Dawn/Day/Dusk/Night) |
+| F | Cycle weather state |
+| F5-F8 | Direct weather (Clear/Foggy/Rainy/Stormy) |
+| Shift+F | Toggle weather auto-cycle |
 
 ## Architecture
 
@@ -124,13 +136,20 @@ See [CLAUDE.md](CLAUDE.md) for detailed architectural documentation.
 - [x] Land value system (pollution, crime, services, commute)
 - [x] Service coverage effects
 - [x] Commute/traffic calculation
+- [x] Weather system (fog, rain, wet surfaces, auto-cycling)
+- [x] GPU instancing infrastructure with mesh pools
+- [x] Clustered shading for many-light rendering
+- [x] Window entity batching
+- [x] Procedural facade texture arrays
+- [x] GPU frustum culling with CPU fallback
+- [x] HZB occlusion culling infrastructure
+- [x] GPU indirect draw integration (complete GPU-driven rendering pipeline)
 
 ### In Progress
 - [ ] Save/Load system with JSON persistence
 - [ ] Autosave functionality
 
 ### Planned
-- [ ] Weather system (fog, rain)
 - [ ] Public transit (buses, trains)
 - [ ] Landmark buildings
 - [ ] Heat map overlays (crime, pollution, land value)

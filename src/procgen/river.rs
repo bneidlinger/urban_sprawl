@@ -1,9 +1,12 @@
 //! River generation for the city.
 //!
 //! Creates a meandering river that flows through the city using Perlin noise.
+//! Only generates in Procedural mode - Sandbox mode starts with a blank terrain.
 
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
+
+use crate::game_state::GameMode;
 
 pub struct RiverPlugin;
 
@@ -12,8 +15,17 @@ impl Plugin for RiverPlugin {
         app.init_resource::<RiverConfig>()
             .init_resource::<River>()
             .init_resource::<RiverGenerated>()
-            .add_systems(Startup, generate_river);
+            // Generate river when entering Procedural mode (not at Startup)
+            .add_systems(OnEnter(GameMode::Procedural), generate_river)
+            // Mark as generated (empty) when entering Sandbox mode
+            .add_systems(OnEnter(GameMode::Sandbox), skip_river_generation);
     }
+}
+
+/// Mark river as generated (but empty) for Sandbox mode.
+fn skip_river_generation(mut generated: ResMut<RiverGenerated>) {
+    generated.0 = true;
+    info!("Sandbox mode - no river generated");
 }
 
 /// Configuration for river generation.

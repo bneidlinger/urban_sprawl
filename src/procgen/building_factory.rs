@@ -3,12 +3,16 @@
 //! The factory consumes zoning and density information from [`LotPlans`]
 //! and emits per-lot building or park plans. This keeps visual spawning
 //! simple while ensuring growable zones produce appropriately scaled
-#![allow(dead_code)]
 //! footprints, floor counts, and façade styles.
+//!
+//! Only runs in Procedural mode - Sandbox mode uses player-painted zones instead.
+
+#![allow(dead_code)]
 
 use bevy::prelude::*;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
+use crate::game_state::GameMode;
 use crate::procgen::lot_engine::{DensityTier, LotPlans, PlannedLot, ZoneType};
 use crate::procgen::lot_geometry::{polygon_bounds, shrink_polygon};
 
@@ -112,8 +116,13 @@ pub enum PlannedStructure {
     Park(ParkPlan),
 }
 
-fn should_plan_blueprints(plans: Res<LotPlans>, blueprints: Res<BuildingBlueprints>) -> bool {
-    plans.generated && !blueprints.generated
+fn should_plan_blueprints(
+    plans: Res<LotPlans>,
+    blueprints: Res<BuildingBlueprints>,
+    game_mode: Res<State<GameMode>>,
+) -> bool {
+    // Only plan blueprints in Procedural mode - Sandbox uses player zones
+    *game_mode.get() == GameMode::Procedural && plans.generated && !blueprints.generated
 }
 
 fn plan_blueprints(

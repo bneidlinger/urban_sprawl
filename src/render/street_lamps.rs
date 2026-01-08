@@ -1,26 +1,36 @@
 //! Street lamp generation along roads.
+//!
+//! Spawns street lamps with real PointLight entities for dynamic lighting.
+//! Lights are automatically managed by the clustered shading system based on time of day.
 
 use bevy::prelude::*;
 
 use crate::procgen::roads::{RoadGraph, RoadType};
-use crate::render::road_mesh::RoadMeshGenerated;
+use crate::render::clustered_shading::{ClusterConfig, DynamicCityLight};
 use crate::render::day_night::TimeOfDay;
+use crate::render::gpu_culling::GpuCullable;
+use crate::render::road_mesh::RoadMeshGenerated;
 
 pub struct StreetLampsPlugin;
 
 impl Plugin for StreetLampsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LampConfig>()
+            .init_resource::<StreetLampsSpawned>()
             .add_systems(Update, spawn_street_lamps.run_if(should_spawn_lamps))
             .add_systems(Update, update_lamp_brightness);
     }
 }
 
+/// Marker that street lamps have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct StreetLampsSpawned(pub bool);
+
 fn should_spawn_lamps(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    lamp_query: Query<&StreetLamp>,
+    spawned: Res<StreetLampsSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && lamp_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 #[derive(Component)]
@@ -31,21 +41,31 @@ pub struct LampFixture;
 
 #[derive(Resource)]
 pub struct LampConfig {
-    pub spacing: f32,
+    /// Spacing between lamps on major roads
+    pub major_spacing: f32,
+    /// Spacing between lamps on minor roads (wider = fewer lamps)
+    pub minor_spacing: f32,
     pub pole_height: f32,
     pub pole_radius: f32,
     pub light_radius: f32,
     pub offset_from_road: f32,
+    /// Whether to place lamps on minor roads
+    pub include_minor_roads: bool,
+    /// Intensity multiplier for minor road lamps (dimmer)
+    pub minor_intensity_factor: f32,
 }
 
 impl Default for LampConfig {
     fn default() -> Self {
         Self {
-            spacing: 30.0,        // ~30m between lamps (realistic)
-            pole_height: 8.0,     // 8m tall (realistic street lamp)
+            major_spacing: 30.0,   // ~30m between lamps on major roads
+            minor_spacing: 45.0,   // ~45m between lamps on minor roads (sparser)
+            pole_height: 8.0,      // 8m tall (realistic street lamp)
             pole_radius: 0.15,
             light_radius: 0.5,
             offset_from_road: 5.0,
+            include_minor_roads: true,
+            minor_intensity_factor: 0.7, // Minor road lamps slightly dimmer
         }
     }
 }
@@ -54,8 +74,10 @@ fn spawn_street_lamps(
     mut commands: Commands,
     road_graph: Res<RoadGraph>,
     config: Res<LampConfig>,
+    cluster_config: Res<ClusterConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<StreetLampsSpawned>,
 ) {
     info!("Spawning street lamps...");
 
@@ -80,15 +102,22 @@ fn spawn_street_lamps(
 
     let mut lamp_count = 0;
 
+    let mut major_count = 0;
+    let mut minor_count = 0;
+
     for edge in road_graph.edges() {
-        // Only add lamps to major roads
-        if edge.road_type != RoadType::Major {
-            continue;
-        }
+        // Determine if we should place lamps on this road type
+        let (spacing, intensity_factor) = match edge.road_type {
+            RoadType::Major => (config.major_spacing, 1.0),
+            RoadType::Minor if config.include_minor_roads => (config.minor_spacing, config.minor_intensity_factor),
+            _ => continue, // Skip highways and alleys
+        };
 
         if edge.points.len() < 2 {
             continue;
         }
+
+        let is_minor = edge.road_type == RoadType::Minor;
 
         // Calculate road width for offset
         let road_width = match edge.road_type {
@@ -101,7 +130,7 @@ fn spawn_street_lamps(
         let lamp_offset = road_width / 2.0 + config.offset_from_road;
 
         // Walk along the road and place lamps at intervals
-        let mut accumulated_dist = config.spacing / 2.0; // Start offset
+        let mut accumulated_dist = spacing / 2.0; // Start offset
         let mut segment_start_dist = 0.0;
 
         for window in edge.points.windows(2) {
@@ -128,26 +157,54 @@ fn spawn_street_lamps(
                     MeshMaterial3d(pole_material.clone()),
                     Transform::from_xyz(lamp_pos.x, config.pole_height / 2.0, lamp_pos.y),
                     StreetLamp,
+                    GpuCullable::new(config.pole_height / 2.0),
                 ));
 
-                // Spawn light fixture
+                // Spawn light fixture (visual mesh)
                 commands.spawn((
                     Mesh3d(light_mesh.clone()),
                     MeshMaterial3d(light_material.clone()),
                     Transform::from_xyz(lamp_pos.x, config.pole_height + config.light_radius * 0.5, lamp_pos.y),
                     StreetLamp,
                     LampFixture,
+                    GpuCullable::new(config.light_radius),
+                ));
+
+                // Spawn real PointLight for dynamic lighting
+                // Minor roads get dimmer lights based on intensity_factor
+                let lamp_intensity = cluster_config.street_lamp_intensity * intensity_factor;
+                commands.spawn((
+                    PointLight {
+                        color: cluster_config.street_lamp_color,
+                        intensity: 0.0, // Managed by DynamicCityLight system
+                        range: cluster_config.street_lamp_radius,
+                        radius: 0.5,
+                        shadows_enabled: cluster_config.point_light_shadows,
+                        ..default()
+                    },
+                    Transform::from_xyz(lamp_pos.x, config.pole_height + config.light_radius * 0.5, lamp_pos.y),
+                    DynamicCityLight::street_lamp(lamp_intensity),
+                    StreetLamp,
                 ));
 
                 lamp_count += 1;
-                accumulated_dist += config.spacing;
+                if is_minor {
+                    minor_count += 1;
+                } else {
+                    major_count += 1;
+                }
+                accumulated_dist += spacing;
             }
 
             segment_start_dist = segment_end_dist;
         }
     }
 
-    info!("Spawned {} street lamps", lamp_count);
+    spawned.0 = true;
+    info!(
+        "Spawned {} street lamps ({} major, {} minor)",
+        lamp_count, major_count, minor_count
+    );
 }
 
 fn update_lamp_brightness(
@@ -173,11 +230,11 @@ fn update_lamp_brightness(
 
     for material_handle in lamp_query.iter() {
         if let Some(material) = materials.get_mut(&material_handle.0) {
-            // Warm orange glow
+            // Warm orange glow - bright against dark night
             material.emissive = LinearRgba::new(
-                1.0 * night_factor * 5.0,
-                0.85 * night_factor * 5.0,
-                0.5 * night_factor * 5.0,
+                1.0 * night_factor * 12.0,
+                0.85 * night_factor * 12.0,
+                0.5 * night_factor * 12.0,
                 1.0,
             );
         }

@@ -13,15 +13,20 @@ pub struct RoadMarkingsPlugin;
 impl Plugin for RoadMarkingsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MarkingsConfig>()
+            .init_resource::<RoadMarkingsSpawned>()
             .add_systems(Update, generate_road_markings.run_if(should_generate_markings));
     }
 }
 
+/// Marker that road markings have been generated (prevents re-running).
+#[derive(Resource, Default)]
+pub struct RoadMarkingsSpawned(pub bool);
+
 fn should_generate_markings(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    markings_query: Query<&RoadMarking>,
+    spawned: Res<RoadMarkingsSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && markings_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 /// Marker for road marking entities.
@@ -56,6 +61,7 @@ fn generate_road_markings(
     terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<RoadMarkingsSpawned>,
 ) {
     info!("Generating road markings...");
 
@@ -166,6 +172,7 @@ fn generate_road_markings(
         }
     }
 
+    spawned.0 = true;
     info!("Road markings generated");
 }
 

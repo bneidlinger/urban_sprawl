@@ -4,6 +4,21 @@ All notable changes to IsoCitySim will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- **Sandbox Mode Now Starts Blank** - True "blank canvas" experience for gameplay
+  - Procedural lot extraction only runs in Procedural mode
+  - Building spawning only runs in Procedural mode
+  - River generation only runs in Procedural mode
+  - Player uses zone painting tools to develop the city from scratch
+- **Procedural Mode Unchanged** - Still auto-generates roads, river, and buildings for testing
+
+### Fixed
+- Fixed repeating spawn logs in Sandbox mode - Added "spawned" marker resources to:
+  - StreetTreesPlugin, ParkedCarsPlugin, CrosswalksPlugin
+  - TrafficLightsPlugin, StreetLampsPlugin, RoadMarkingsPlugin
+  - StreetFurniturePlugin (hydrants, benches, trash cans)
+- Systems now run once instead of every frame when no entities are created
+
 ### Added
 - **City Simulation Mode** - Transform from generator to full city builder
   - Game state machine with MainMenu, Playing states
@@ -122,6 +137,66 @@ All notable changes to IsoCitySim will be documented in this file.
 - **Building Drop Shadows** - Alpha-blended shadow planes beneath buildings
   - Shadow offset based on building height (simulates sun angle)
   - Configurable opacity and spread
+- **Weather System** - Dynamic weather with fog, rain, and wet surfaces
+  - Four weather states: Clear, Foggy, Rainy, Stormy
+  - Weather-modulated fog density (1x to 3x multiplier on base day/night fog)
+  - Fog color tinting per weather state
+  - Custom rain shader (`assets/shaders/rain.wgsl`) with procedural falling raindrops
+  - Multi-layer rain with wind angle effects during storms
+  - Wet surface overlay (`assets/shaders/wet_surface.wgsl`) with puddles and reflections
+  - Rain ripple animation in puddles during active rain
+  - Smooth 10-second transitions between weather states
+  - Automatic weather cycling (random changes every 10-30 minutes)
+  - Cloud shadow integration (coverage increases during storms)
+  - Keyboard controls: F (cycle), F5-F8 (direct), Shift+F (toggle auto-cycle)
+- **GPU-Driven Rendering Pipeline** - High-performance rendering infrastructure
+  - **GPU Instancing** (`src/render/instancing.rs`) - Hardware instanced rendering for city geometry
+    - Extended InstanceData struct (112 bytes) with full 4x4 transform matrix
+    - Material parameters (roughness, metallic, emissive, facade_type)
+    - Bounding info for culling integration
+  - **Mesh Pools** (`src/render/mesh_pools.rs`) - Shared mesh pool for building variants
+    - Box, L-Shape, Tower-on-Base, and Stepped building meshes
+    - Reduces mesh duplication across thousands of buildings
+  - **Building Instance Buffer** (`src/render/building_instances.rs`) - Centralized instance management
+    - BuildingInstanceData resource for batched rendering
+    - Automatic buffer resizing and dirty tracking
+  - **Clustered Shading** (`src/render/clustered_shading/`) - Efficient many-light rendering
+    - 16x9x24 cluster grid with exponential depth slicing (3,456 clusters)
+    - Supports 5,000+ dynamic point lights at 60 FPS
+    - Light-to-cluster assignment for O(1) fragment light lookup
+    - Custom WGSL shaders (`cluster_assign.wgsl`, `cluster_lighting.wgsl`)
+  - **Window Instancing** (`src/render/window_instances.rs`) - Batched window rendering
+    - WindowInstanceData struct with position, size, normal, color, intensity
+    - Facade-aware window properties (size, occupancy, night intensity)
+    - Custom window shader (`assets/shaders/window_instanced.wgsl`)
+  - **Facade Texture Arrays** (`src/render/facade_textures.rs`) - Procedural texture generation
+    - 5-layer texture array (Brick, Concrete, Glass, Metal, Painted)
+    - 256x256 procedural textures with varied patterns
+    - Single-draw-call material switching via facade_type index
+- **GPU Frustum Culling** (`src/render/gpu_culling/`) - Compute shader object culling
+  - ObjectData buffer with bounding spheres (32 bytes per object)
+  - FrustumPlanes extraction using Gribb-Hartmann method
+  - 6-plane sphere-frustum intersection testing
+  - WGSL compute shader (`assets/shaders/frustum_cull.wgsl`) with 64-thread workgroups
+  - CPU fallback culling when compute shaders unavailable
+  - GpuCullable component for per-entity culling participation
+  - Real-time culling statistics (visible/culled ratio)
+- **HZB Occlusion Culling** (`src/render/hzb/`) - Hierarchical depth buffer infrastructure
+  - HzbPyramid resource for depth mip chain management
+  - CpuHzbPyramid for software fallback occlusion testing
+  - MAX reduction depth pyramid generation (`assets/shaders/hzb_generate.wgsl`)
+  - Screen-space projection utilities for bounding sphere size calculation
+  - Appropriate mip level selection based on projected object size
+  - Previous-frame depth usage for render dependency avoidance
+  - Integration with frustum culling shader (`main_with_hzb` entry point)
+- **GPU Indirect Draw Integration** (`src/render/gpu_culling/pipeline.rs`) - Fully GPU-driven rendering
+  - GpuCullingPipeline with compute shader binding
+  - GpuCullingBuffers for uniforms, frustum, objects, visibility, and indirect commands
+  - DrawIndexedIndirect buffer populated by culling compute shader
+  - Render graph node (GpuCullingNode) for compute pass execution
+  - ExtractedCullData for main-to-render world data transfer
+  - Zero CPU involvement in visibility determination
+  - `main_indirect` shader entry point for indirect draw command generation
 
 ### Fixed
 - **Terrain-following for all objects** - All city elements now properly follow terrain height:

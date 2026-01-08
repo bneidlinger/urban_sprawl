@@ -6,6 +6,7 @@ use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 use crate::procgen::roads::{RoadGraph, RoadType};
+use crate::render::gpu_culling::GpuCullable;
 use crate::render::instancing::TerrainConfig;
 use crate::render::road_mesh::RoadMeshGenerated;
 
@@ -14,15 +15,20 @@ pub struct ParkedCarsPlugin;
 impl Plugin for ParkedCarsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ParkedCarConfig>()
+            .init_resource::<ParkedCarsSpawned>()
             .add_systems(Update, spawn_parked_cars.run_if(should_spawn_cars));
     }
 }
 
+/// Marker that parked cars have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct ParkedCarsSpawned(pub bool);
+
 fn should_spawn_cars(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    car_query: Query<&ParkedCar>,
+    spawned: Res<ParkedCarsSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && car_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 #[derive(Component)]
@@ -73,6 +79,7 @@ fn spawn_parked_cars(
     config: Res<ParkedCarConfig>,
     terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
+    mut spawned: ResMut<ParkedCarsSpawned>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     info!("Spawning parked cars...");
@@ -162,6 +169,9 @@ fn spawn_parked_cars(
                     let terrain_height = terrain.sample(car_pos.x, car_pos.y);
                     let body_y = terrain_height + config.wheel_radius + config.car_height * 0.3;
 
+                    // Car bounding radius (diagonal of body)
+                    let car_radius = (config.car_length * config.car_length + config.car_width * config.car_width + config.car_height * config.car_height).sqrt() / 2.0;
+
                     // Spawn car body
                     commands.spawn((
                         Mesh3d(body_mesh.clone()),
@@ -169,6 +179,7 @@ fn spawn_parked_cars(
                         Transform::from_xyz(car_pos.x, body_y, car_pos.y)
                             .with_rotation(rotation),
                         ParkedCar,
+                        GpuCullable::new(car_radius),
                     ));
 
                     // Spawn cabin (on top of body)
@@ -179,6 +190,7 @@ fn spawn_parked_cars(
                         Transform::from_xyz(car_pos.x, cabin_y, car_pos.y)
                             .with_rotation(rotation),
                         ParkedCar,
+                        GpuCullable::new(car_radius * 0.5),
                     ));
 
                     // Spawn wheels (4 corners)
@@ -205,6 +217,7 @@ fn spawn_parked_cars(
                             Transform::from_xyz(wheel_pos.x, wheel_terrain + config.wheel_radius, wheel_pos.y)
                                 .with_rotation(rotation * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
                             ParkedCar,
+                            GpuCullable::new(config.wheel_radius),
                         ));
                     }
 
@@ -218,6 +231,7 @@ fn spawn_parked_cars(
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} parked cars", car_count);
 }
 

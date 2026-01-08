@@ -1,10 +1,13 @@
 //! City block extraction from road graph.
 //!
 //! Uses a grid-based approach to find buildable areas between roads.
+//! Only runs in Procedural mode - Sandbox mode uses player-painted zones instead.
 
 #![allow(dead_code)]
 
 use bevy::prelude::*;
+
+use crate::game_state::GameMode;
 
 use super::parcels::Lot;
 use super::river::River;
@@ -25,8 +28,10 @@ impl Plugin for BlockExtractorPlugin {
 fn should_extract_blocks(
     generated: Res<RoadsGenerated>,
     blocks: Res<CityBlocks>,
+    game_mode: Res<State<GameMode>>,
 ) -> bool {
-    generated.0 && !blocks.extracted
+    // Only extract blocks in Procedural mode - Sandbox uses player zones
+    *game_mode.get() == GameMode::Procedural && generated.0 && !blocks.extracted
 }
 
 /// Configuration for block extraction.

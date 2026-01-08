@@ -1,6 +1,7 @@
 //! Hardware instancing for rendering 100k+ entities efficiently.
 //!
 //! Uses Bevy's built-in instancing with custom instance data.
+//! Extended to support full transform matrices and material parameters.
 
 #![allow(dead_code)]
 
@@ -22,11 +23,19 @@ use noise::{NoiseFn, Perlin};
 
 use crate::procgen::river::River;
 
+// Re-export building instance types for convenience
+pub use crate::render::building_instances::{
+    BuildingInstanceBuffer, BuildingInstanceData, BuildingMaterialPalette,
+};
+
 pub struct InstancingPlugin;
 
 impl Plugin for InstancingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<InstancedMaterial>::default())
+            // BuildingInstancedMaterial disabled - shader needs proper Bevy Material integration
+            // TODO: Fix building_instanced.wgsl to align with Bevy's material binding expectations
+            // .add_plugins(MaterialPlugin::<BuildingInstancedMaterial>::default())
             .init_resource::<InstancingConfig>()
             .init_resource::<TerrainConfig>()
             .add_systems(PostStartup, setup_instanced_cubes);
@@ -135,6 +144,135 @@ impl Material for InstancedMaterial {
                     format: VertexFormat::Float32x4,
                     offset: 16,
                     shader_location: 6,
+                },
+            ],
+        };
+
+        descriptor
+            .vertex
+            .buffers
+            .push(instance_layout);
+
+        Ok(())
+    }
+}
+
+/// Extended material for building instancing with full transform matrix support.
+/// Uses the extended shader at shaders/building_instanced.wgsl
+#[derive(Asset, TypePath, AsBindGroup, Clone)]
+pub struct BuildingInstancedMaterial {
+    #[uniform(0)]
+    pub base_color: LinearRgba,
+    #[uniform(0)]
+    pub time_of_day: f32,
+    #[uniform(0)]
+    pub use_textures: f32,
+
+    /// Facade albedo texture array (optional)
+    #[texture(1, dimension = "2d_array")]
+    #[sampler(3)]
+    pub facade_albedo: Option<Handle<Image>>,
+
+    /// Facade normal texture array (optional)
+    #[texture(2, dimension = "2d_array")]
+    pub facade_normal: Option<Handle<Image>>,
+}
+
+impl Default for BuildingInstancedMaterial {
+    fn default() -> Self {
+        Self {
+            base_color: LinearRgba::WHITE,
+            time_of_day: 0.5,
+            use_textures: 0.0, // Disabled by default
+            facade_albedo: None,
+            facade_normal: None,
+        }
+    }
+}
+
+impl BuildingInstancedMaterial {
+    /// Create a material with texture arrays enabled.
+    pub fn with_textures(
+        albedo: Handle<Image>,
+        normal: Handle<Image>,
+    ) -> Self {
+        Self {
+            base_color: LinearRgba::WHITE,
+            time_of_day: 0.5,
+            use_textures: 1.0,
+            facade_albedo: Some(albedo),
+            facade_normal: Some(normal),
+        }
+    }
+}
+
+impl Material for BuildingInstancedMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "shaders/building_instanced.wgsl".into()
+    }
+
+    fn fragment_shader() -> ShaderRef {
+        "shaders/building_instanced.wgsl".into()
+    }
+
+    fn specialize(
+        _pipeline: &MaterialPipeline<Self>,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        // Extended instance data layout for BuildingInstanceData (128 bytes)
+        let instance_layout = VertexBufferLayout {
+            array_stride: std::mem::size_of::<BuildingInstanceData>() as u64,
+            step_mode: VertexStepMode::Instance,
+            attributes: vec![
+                // Transform matrix column 0 at location 5
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 0,
+                    shader_location: 5,
+                },
+                // Transform matrix column 1 at location 6
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 16,
+                    shader_location: 6,
+                },
+                // Transform matrix column 2 at location 7
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 32,
+                    shader_location: 7,
+                },
+                // Transform matrix column 3 at location 8
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 48,
+                    shader_location: 8,
+                },
+                // Color at location 9
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 64,
+                    shader_location: 9,
+                },
+                // Material params at location 10
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 80,
+                    shader_location: 10,
+                },
+                // Bounds at location 11
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 96,
+                    shader_location: 11,
+                },
+                // Extra data at location 12
+                bevy::render::render_resource::VertexAttribute {
+                    format: VertexFormat::Float32x4,
+                    offset: 112,
+                    shader_location: 12,
                 },
             ],
         };

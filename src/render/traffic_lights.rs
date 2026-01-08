@@ -1,10 +1,14 @@
 //! Traffic light generation at intersections.
+//!
+//! Spawns traffic lights with real PointLight entities for dynamic lighting.
+//! Lights change intensity based on the current phase (red/yellow/green).
 
 use bevy::prelude::*;
 use petgraph::graph::NodeIndex;
 
 use crate::procgen::roads::RoadGraph;
 use crate::render::road_mesh::RoadMeshGenerated;
+use crate::render::clustered_shading::{cluster_config::traffic_colors, ClusterConfig, DynamicCityLight};
 
 pub struct TrafficLightsPlugin;
 
@@ -32,22 +36,42 @@ pub struct TrafficLightController {
 impl Plugin for TrafficLightsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TrafficLightConfig>()
+            .init_resource::<TrafficLightsSpawned>()
             .add_systems(Update, (
                 spawn_traffic_lights.run_if(should_spawn_lights),
                 update_traffic_light_phases,
+                update_traffic_signal_intensities.after(update_traffic_light_phases),
             ));
     }
 }
 
+/// Marker that traffic lights have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct TrafficLightsSpawned(pub bool);
+
 fn should_spawn_lights(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    light_query: Query<&TrafficLight>,
+    spawned: Res<TrafficLightsSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && light_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 #[derive(Component)]
 pub struct TrafficLight;
+
+/// Signal color component for individual traffic light signals.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrafficSignalColor {
+    Red,
+    Yellow,
+    Green,
+}
+
+/// Links a traffic signal to its controller for phase-based intensity updates.
+#[derive(Component)]
+pub struct TrafficSignalLink {
+    pub controller: Entity,
+}
 
 #[derive(Resource)]
 pub struct TrafficLightConfig {
@@ -78,8 +102,10 @@ fn spawn_traffic_lights(
     mut commands: Commands,
     road_graph: Res<RoadGraph>,
     config: Res<TrafficLightConfig>,
+    cluster_config: Res<ClusterConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<TrafficLightsSpawned>,
 ) {
     info!("Spawning traffic lights...");
 
@@ -133,14 +159,14 @@ fn spawn_traffic_lights(
         }
 
         // Spawn a traffic light controller for this intersection
-        commands.spawn(TrafficLightController {
+        let controller_entity = commands.spawn(TrafficLightController {
             phase: LightPhase::Green,
             timer: 0.0,
             node_index: node_idx,
             green_duration: 12.0,
             yellow_duration: 3.0,
             red_duration: 12.0,
-        });
+        }).id();
 
         // Get directions to neighboring roads
         let mut road_directions: Vec<Vec2> = Vec::new();
@@ -194,46 +220,95 @@ fn spawn_traffic_lights(
 
             // Red light (top)
             let red_y = box_y + light_spacing;
+            let red_pos = Vec3::new(
+                light_pos.x + forward.x * light_offset,
+                red_y,
+                light_pos.y + forward.y * light_offset,
+            );
             commands.spawn((
                 Mesh3d(light_mesh.clone()),
                 MeshMaterial3d(red_light.clone()),
-                Transform::from_xyz(
-                    light_pos.x + forward.x * light_offset,
-                    red_y,
-                    light_pos.y + forward.y * light_offset,
-                ),
+                Transform::from_translation(red_pos),
                 TrafficLight,
+            ));
+            // Red PointLight (starts off since phase is Green)
+            commands.spawn((
+                PointLight {
+                    color: traffic_colors::RED,
+                    intensity: 0.0, // Controlled by phase system
+                    range: cluster_config.traffic_light_radius,
+                    radius: 0.12,
+                    shadows_enabled: false,
+                    ..default()
+                },
+                Transform::from_translation(red_pos),
+                DynamicCityLight::traffic_light(cluster_config.traffic_light_intensity),
+                TrafficSignalColor::Red,
+                TrafficSignalLink { controller: controller_entity },
             ));
 
             // Yellow light (middle)
+            let yellow_pos = Vec3::new(
+                light_pos.x + forward.x * light_offset,
+                box_y,
+                light_pos.y + forward.y * light_offset,
+            );
             commands.spawn((
                 Mesh3d(light_mesh.clone()),
                 MeshMaterial3d(yellow_light.clone()),
-                Transform::from_xyz(
-                    light_pos.x + forward.x * light_offset,
-                    box_y,
-                    light_pos.y + forward.y * light_offset,
-                ),
+                Transform::from_translation(yellow_pos),
                 TrafficLight,
+            ));
+            // Yellow PointLight (starts off since phase is Green)
+            commands.spawn((
+                PointLight {
+                    color: traffic_colors::YELLOW,
+                    intensity: 0.0, // Controlled by phase system
+                    range: cluster_config.traffic_light_radius,
+                    radius: 0.12,
+                    shadows_enabled: false,
+                    ..default()
+                },
+                Transform::from_translation(yellow_pos),
+                DynamicCityLight::traffic_light(cluster_config.traffic_light_intensity),
+                TrafficSignalColor::Yellow,
+                TrafficSignalLink { controller: controller_entity },
             ));
 
             // Green light (bottom)
             let green_y = box_y - light_spacing;
+            let green_pos = Vec3::new(
+                light_pos.x + forward.x * light_offset,
+                green_y,
+                light_pos.y + forward.y * light_offset,
+            );
             commands.spawn((
                 Mesh3d(light_mesh.clone()),
                 MeshMaterial3d(green_light.clone()),
-                Transform::from_xyz(
-                    light_pos.x + forward.x * light_offset,
-                    green_y,
-                    light_pos.y + forward.y * light_offset,
-                ),
+                Transform::from_translation(green_pos),
                 TrafficLight,
+            ));
+            // Green PointLight (starts on since phase is Green)
+            commands.spawn((
+                PointLight {
+                    color: traffic_colors::GREEN,
+                    intensity: cluster_config.traffic_light_intensity, // On by default
+                    range: cluster_config.traffic_light_radius,
+                    radius: 0.12,
+                    shadows_enabled: false,
+                    ..default()
+                },
+                Transform::from_translation(green_pos),
+                DynamicCityLight::traffic_light(cluster_config.traffic_light_intensity),
+                TrafficSignalColor::Green,
+                TrafficSignalLink { controller: controller_entity },
             ));
 
             light_count += 1;
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} traffic lights", light_count);
 }
 
@@ -260,6 +335,31 @@ fn update_traffic_light_phases(
                 LightPhase::Green => LightPhase::Yellow,
                 LightPhase::Yellow => LightPhase::Red,
                 LightPhase::Red => LightPhase::Green,
+            };
+        }
+    }
+}
+
+/// Update traffic signal PointLight intensities based on controller phase.
+fn update_traffic_signal_intensities(
+    controllers: Query<(Entity, &TrafficLightController)>,
+    mut signals: Query<(&mut PointLight, &DynamicCityLight, &TrafficSignalColor, &TrafficSignalLink)>,
+) {
+    for (mut point_light, city_light, signal_color, link) in signals.iter_mut() {
+        // Find the controller for this signal
+        if let Ok((_, controller)) = controllers.get(link.controller) {
+            // Determine if this signal should be on based on phase
+            let should_be_on = match (controller.phase, signal_color) {
+                (LightPhase::Red, TrafficSignalColor::Red) => true,
+                (LightPhase::Yellow, TrafficSignalColor::Yellow) => true,
+                (LightPhase::Green, TrafficSignalColor::Green) => true,
+                _ => false,
+            };
+
+            point_light.intensity = if should_be_on {
+                city_light.base_intensity
+            } else {
+                0.0
             };
         }
     }

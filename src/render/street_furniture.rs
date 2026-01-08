@@ -6,32 +6,57 @@ use bevy::prelude::*;
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
+use crate::procgen::building_factory::BuildingArchetype;
 use crate::procgen::roads::{RoadGraph, RoadType};
+use crate::render::building_spawner::{Building, Park, BuildingsSpawned};
+use crate::render::gpu_culling::GpuCullable;
 use crate::render::road_mesh::RoadMeshGenerated;
-use crate::render::building_spawner::{Park, BuildingsSpawned};
 
 pub struct StreetFurniturePlugin;
 
 impl Plugin for StreetFurniturePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<StreetFurnitureConfig>()
+            .init_resource::<HydrantsSpawned>()
+            .init_resource::<BenchesSpawned>()
+            .init_resource::<TrashCansSpawned>()
             .add_systems(Update, spawn_fire_hydrants.run_if(should_spawn_hydrants))
-            .add_systems(Update, spawn_park_benches.run_if(should_spawn_benches));
+            .add_systems(Update, spawn_park_benches.run_if(should_spawn_benches))
+            .add_systems(Update, spawn_trash_cans.run_if(should_spawn_trash_cans));
     }
+}
+
+/// Marker that hydrants have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct HydrantsSpawned(pub bool);
+
+/// Marker that benches have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct BenchesSpawned(pub bool);
+
+/// Marker that trash cans have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct TrashCansSpawned(pub bool);
+
+fn should_spawn_trash_cans(
+    spawned: Res<BuildingsSpawned>,
+    trash_spawned: Res<TrashCansSpawned>,
+) -> bool {
+    spawned.0 && !trash_spawned.0
 }
 
 fn should_spawn_hydrants(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    hydrant_query: Query<&FireHydrant>,
+    spawned: Res<HydrantsSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && hydrant_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 fn should_spawn_benches(
     spawned: Res<BuildingsSpawned>,
-    bench_query: Query<&Bench>,
+    bench_spawned: Res<BenchesSpawned>,
 ) -> bool {
-    spawned.0 && bench_query.is_empty()
+    spawned.0 && !bench_spawned.0
 }
 
 #[derive(Component)]
@@ -52,6 +77,12 @@ pub struct StreetFurnitureConfig {
     pub bench_height: f32,
     pub bench_depth: f32,
     pub seed: u64,
+    /// Trash can height
+    pub trash_can_height: f32,
+    /// Trash can radius
+    pub trash_can_radius: f32,
+    /// Probability of trash can near commercial building
+    pub trash_can_probability: f32,
 }
 
 impl Default for StreetFurnitureConfig {
@@ -64,6 +95,9 @@ impl Default for StreetFurnitureConfig {
             bench_height: 0.45,
             bench_depth: 0.5,
             seed: 99999,
+            trash_can_height: 1.0,
+            trash_can_radius: 0.25,
+            trash_can_probability: 0.6, // 60% of commercial buildings
         }
     }
 }
@@ -74,6 +108,7 @@ fn spawn_fire_hydrants(
     config: Res<StreetFurnitureConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<HydrantsSpawned>,
 ) {
     info!("Spawning fire hydrants...");
 
@@ -143,6 +178,7 @@ fn spawn_fire_hydrants(
                     MeshMaterial3d(hydrant_material.clone()),
                     Transform::from_xyz(hydrant_pos.x, config.hydrant_height / 2.0, hydrant_pos.y),
                     FireHydrant,
+                    GpuCullable::new(config.hydrant_height),
                 ));
 
                 // Cap on top
@@ -151,6 +187,7 @@ fn spawn_fire_hydrants(
                     MeshMaterial3d(hydrant_material.clone()),
                     Transform::from_xyz(hydrant_pos.x, config.hydrant_height + 0.05, hydrant_pos.y),
                     FireHydrant,
+                    GpuCullable::new(config.hydrant_radius * 1.3),
                 ));
 
                 // Side nozzles
@@ -178,6 +215,7 @@ fn spawn_fire_hydrants(
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} fire hydrants", hydrant_count);
 }
 
@@ -187,6 +225,7 @@ fn spawn_park_benches(
     park_query: Query<&Transform, With<Park>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<BenchesSpawned>,
 ) {
     info!("Spawning park benches...");
 
@@ -273,5 +312,117 @@ fn spawn_park_benches(
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} park benches", bench_count);
+}
+
+/// Spawn trash cans near commercial buildings.
+fn spawn_trash_cans(
+    mut commands: Commands,
+    config: Res<StreetFurnitureConfig>,
+    building_query: Query<(&Building, &Transform), With<Building>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<TrashCansSpawned>,
+) {
+    info!("Spawning trash cans...");
+
+    let mut rng = StdRng::seed_from_u64(config.seed + 3);
+
+    // Trash can materials
+    let can_colors = [
+        Color::srgb(0.15, 0.35, 0.15),  // Dark green (standard)
+        Color::srgb(0.2, 0.2, 0.25),     // Dark gray
+        Color::srgb(0.1, 0.15, 0.3),     // Dark blue
+    ];
+
+    // Trash can mesh (cylinder body)
+    let body_mesh = meshes.add(Cylinder::new(config.trash_can_radius, config.trash_can_height));
+    let lid_mesh = meshes.add(Cylinder::new(config.trash_can_radius * 1.1, 0.05));
+    let rim_mesh = meshes.add(Torus::new(config.trash_can_radius * 0.85, config.trash_can_radius * 0.1));
+
+    let mut trash_can_count = 0;
+    let mut processed_positions: std::collections::HashSet<(i32, i32)> = std::collections::HashSet::new();
+
+    for (building, transform) in building_query.iter() {
+        // Only commercial buildings get street trash cans
+        if building.building_type != BuildingArchetype::Commercial {
+            continue;
+        }
+
+        // Avoid placing multiple cans near the same building
+        let pos_hash = (
+            (transform.translation.x / 5.0) as i32,
+            (transform.translation.z / 5.0) as i32,
+        );
+        if processed_positions.contains(&pos_hash) {
+            continue;
+        }
+        processed_positions.insert(pos_hash);
+
+        // Random chance
+        if rng.gen::<f32>() > config.trash_can_probability {
+            continue;
+        }
+
+        let building_pos = Vec2::new(transform.translation.x, transform.translation.z);
+
+        // Place trash can in front of building (on sidewalk)
+        let offset = Vec2::new(
+            rng.gen_range(-3.0..3.0),
+            rng.gen_range(8.0..12.0), // In front on sidewalk
+        );
+        let trash_pos = building_pos + offset;
+
+        // Pick a color
+        let color = can_colors[rng.gen_range(0..can_colors.len())];
+        let can_material = materials.add(StandardMaterial {
+            base_color: color,
+            perceptual_roughness: 0.8,
+            metallic: 0.2,
+            ..default()
+        });
+
+        // Darken lid color
+        let lid_color = {
+            let linear = color.to_linear();
+            Color::linear_rgb(linear.red * 0.8, linear.green * 0.8, linear.blue * 0.8)
+        };
+        let lid_material = materials.add(StandardMaterial {
+            base_color: lid_color,
+            perceptual_roughness: 0.7,
+            metallic: 0.3,
+            ..default()
+        });
+
+        // Main body
+        commands.spawn((
+            Mesh3d(body_mesh.clone()),
+            MeshMaterial3d(can_material.clone()),
+            Transform::from_xyz(trash_pos.x, config.trash_can_height / 2.0, trash_pos.y),
+            TrashCan,
+        ));
+
+        // Lid on top
+        commands.spawn((
+            Mesh3d(lid_mesh.clone()),
+            MeshMaterial3d(lid_material.clone()),
+            Transform::from_xyz(trash_pos.x, config.trash_can_height + 0.025, trash_pos.y),
+            TrashCan,
+        ));
+
+        // Rim around opening
+        commands.spawn((
+            Mesh3d(rim_mesh.clone()),
+            MeshMaterial3d(can_material),
+            Transform::from_xyz(trash_pos.x, config.trash_can_height, trash_pos.y)
+                .with_rotation(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)),
+            TrashCan,
+        ));
+
+        trash_can_count += 1;
+    }
+
+    spawned.0 = true;
+    info!("Spawned {} trash cans near commercial buildings", trash_can_count);
 }

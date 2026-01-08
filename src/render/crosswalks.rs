@@ -14,15 +14,20 @@ pub struct CrosswalksPlugin;
 impl Plugin for CrosswalksPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CrosswalkConfig>()
+            .init_resource::<CrosswalksSpawned>()
             .add_systems(Update, spawn_crosswalks.run_if(should_spawn_crosswalks));
     }
 }
 
+/// Marker that crosswalks have been spawned (prevents re-running).
+#[derive(Resource, Default)]
+pub struct CrosswalksSpawned(pub bool);
+
 fn should_spawn_crosswalks(
     road_mesh_query: Query<&RoadMeshGenerated>,
-    crosswalk_query: Query<&Crosswalk>,
+    spawned: Res<CrosswalksSpawned>,
 ) -> bool {
-    !road_mesh_query.is_empty() && crosswalk_query.is_empty()
+    !road_mesh_query.is_empty() && !spawned.0
 }
 
 #[derive(Component)]
@@ -56,6 +61,7 @@ fn spawn_crosswalks(
     terrain_config: Res<TerrainConfig>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned: ResMut<CrosswalksSpawned>,
 ) {
     info!("Spawning crosswalks...");
 
@@ -126,6 +132,7 @@ fn spawn_crosswalks(
         }
     }
 
+    spawned.0 = true;
     info!("Spawned {} crosswalks", crosswalk_count);
 }
 
