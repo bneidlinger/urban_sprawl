@@ -60,9 +60,9 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                 padding: UiRect::all(Val::Px(8.0)),
                 flex_direction: FlexDirection::Column,
                 row_gap: Val::Px(6.0),
+                border: UiRect::all(Val::Px(1.0)),
                 ..default()
             },
-            border: UiRect::all(Val::Px(1.0)),
             BackgroundColor(PANEL_BG),
             BorderColor(BORDER),
             ToolboxRoot,
