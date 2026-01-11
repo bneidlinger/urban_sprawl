@@ -430,8 +430,8 @@ fn spawn_moving_vehicles(
         let terrain_height = terrain.sample(pos.x, pos.y);
         let road_surface = terrain_height + 0.12; // Road height offset
         let body_y = road_surface + height * 0.35;
-        let angle = dir.y.atan2(dir.x);
-        let rotation = Quat::from_rotation_y(-angle);
+        let angle = (-dir.x).atan2(-dir.y);
+        let rotation = Quat::from_rotation_y(angle);
 
         // Spawn vehicle body with navigation and type
         let vehicle_entity = commands.spawn((
@@ -764,8 +764,8 @@ fn vehicle_transform_sync(
 
         // Update rotation to face direction of travel
         if dir.length_squared() > 0.001 {
-            let angle = dir.y.atan2(dir.x);
-            transform.rotation = Quat::from_rotation_y(-angle);
+            let angle = (-dir.x).atan2(-dir.y);
+            transform.rotation = Quat::from_rotation_y(angle);
         }
     }
 }

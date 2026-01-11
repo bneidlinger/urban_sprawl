@@ -260,17 +260,44 @@ fn spawn_parked_cars(
                         ..default()
                     });
 
-                    // Calculate rotation to align with road
-                    let angle = dir.y.atan2(dir.x);
+                    // Calculate rotation to align hood with direction of travel
+                    let base_yaw = (-dir.x).atan2(-dir.y);
                     // Add slight random angle variation for realism
                     let angle_variation = rng.gen_range(-0.05..0.05);
-                    let rotation = Quat::from_rotation_y(-angle + angle_variation);
+                    let rotation = Quat::from_rotation_y(base_yaw + angle_variation);
 
-                    // Sample terrain height at car position
-                    let terrain_height = terrain.sample(car_pos.x, car_pos.y);
-                    // Road surface is above terrain, and body sits on wheels
-                    let road_surface = terrain_height + 0.12; // Road height offset
-                    let body_y = road_surface + wheel_radius * 0.6;
+                    // Spawn wheels (4 corners)
+                    let wheel_positions = [
+                        Vec2::new(vehicle_config.length * 0.35, vehicle_config.width * 0.42),
+                        Vec2::new(vehicle_config.length * 0.35, -vehicle_config.width * 0.42),
+                        Vec2::new(-vehicle_config.length * 0.32, vehicle_config.width * 0.42),
+                        Vec2::new(-vehicle_config.length * 0.32, -vehicle_config.width * 0.42),
+                    ];
+
+                    let mut max_wheel_surface = f32::MIN;
+
+                    for wheel_offset in wheel_positions {
+                        let wheel_world_pos = car_pos + dir * wheel_offset.x + perp * wheel_offset.y;
+                        let wheel_terrain = terrain.sample(wheel_world_pos.x, wheel_world_pos.y);
+                        let wheel_road_surface = wheel_terrain + 0.12; // Road height offset
+                        max_wheel_surface = max_wheel_surface.max(wheel_road_surface);
+
+                        // Wheel rotation: the wheel mesh has its axle along Z, we need it along the car's width (local X)
+                        // Rotate 90 degrees around Y to reorient the axle, then apply car rotation
+                        let wheel_rotation = rotation * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+
+                        commands.spawn((
+                            Mesh3d(wheel_mesh_handle.clone()),
+                            MeshMaterial3d(wheel_material.clone()),
+                            Transform::from_xyz(wheel_world_pos.x, wheel_road_surface + wheel_radius, wheel_world_pos.y)
+                                .with_rotation(wheel_rotation),
+                            ParkedCar,
+                            GpuCullable::new(wheel_radius),
+                        ));
+                    }
+
+                    // Road surface is above terrain, and body sits on the highest wheel
+                    let body_y = max_wheel_surface + wheel_radius * 0.6;
 
                     // Car bounding radius
                     let car_radius = (vehicle_config.length * vehicle_config.length
@@ -286,39 +313,6 @@ fn spawn_parked_cars(
                         ParkedCar,
                         GpuCullable::new(car_radius),
                     ));
-
-                    // Spawn wheels (4 corners)
-                    let wheel_positions = [
-                        Vec2::new(vehicle_config.length * 0.35, vehicle_config.width * 0.42),
-                        Vec2::new(vehicle_config.length * 0.35, -vehicle_config.width * 0.42),
-                        Vec2::new(-vehicle_config.length * 0.32, vehicle_config.width * 0.42),
-                        Vec2::new(-vehicle_config.length * 0.32, -vehicle_config.width * 0.42),
-                    ];
-
-                    for wheel_offset in wheel_positions {
-                        // Rotate wheel offset by car angle
-                        let rotated_offset = Vec2::new(
-                            wheel_offset.x * angle.cos() + wheel_offset.y * angle.sin(),
-                            -wheel_offset.x * angle.sin() + wheel_offset.y * angle.cos(),
-                        );
-
-                        let wheel_world_pos = car_pos + rotated_offset;
-                        let wheel_terrain = terrain.sample(wheel_world_pos.x, wheel_world_pos.y);
-                        let wheel_road_surface = wheel_terrain + 0.12; // Road height offset
-
-                        // Wheel rotation: the wheel mesh has its axle along Z, we need it along the car's width (local X)
-                        // Rotate 90 degrees around Y to reorient the axle, then apply car rotation
-                        let wheel_rotation = rotation * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
-
-                        commands.spawn((
-                            Mesh3d(wheel_mesh_handle.clone()),
-                            MeshMaterial3d(wheel_material.clone()),
-                            Transform::from_xyz(wheel_world_pos.x, wheel_road_surface + wheel_radius, wheel_world_pos.y)
-                                .with_rotation(wheel_rotation),
-                            ParkedCar,
-                            GpuCullable::new(wheel_radius),
-                        ));
-                    }
 
                     car_count += 1;
                 }
