@@ -262,6 +262,35 @@ fn generate_sedan_mesh(config: &VehicleMeshConfig) -> Mesh {
         rear_window_base, trunk_end,
     );
 
+    // 7. Front bumper and grille volume
+    let bumper_height = body_top * 0.42;
+    let bumper_depth = l * 0.035;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.98, bumper_height, front_bumper + l * 0.045),
+    );
+
+    // 8. Rear bumper
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.97, ground, trunk_end),
+        Vec3::new(hw * 0.97, bumper_height * 0.92, rear_bumper + l * 0.02),
+    );
+
+    // 9. Side skirts
+    let skirt_height = ground + h * 0.06;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw, ground, hood_start),
+        Vec3::new(-hw * 0.90, skirt_height, trunk_end),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(hw * 0.90, ground, hood_start),
+        Vec3::new(hw, skirt_height, trunk_end),
+    );
+
     build_mesh_with_uvs(positions, normals, indices)
 }
 
@@ -329,6 +358,36 @@ fn generate_suv_mesh(config: &VehicleMeshConfig) -> Mesh {
         body_top,
         roof_top, roof_top * 0.85,
         roof_end, rear_bumper - l * 0.03,
+    );
+
+    // Front bumper
+    let bumper_height = body_top * 0.5;
+    let bumper_depth = l * 0.04;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.99, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.99, bumper_height, front_bumper + l * 0.05),
+    );
+
+    // Rear bumper
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, rear_bumper - l * 0.06),
+        Vec3::new(hw * 0.98, bumper_height, rear_bumper + l * 0.02),
+    );
+
+    // Roof rails
+    let rail_height = roof_top + h * 0.02;
+    let rail_thickness = h * 0.03;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-cabin_w, rail_height, roof_start + l * 0.04),
+        Vec3::new(-cabin_w + hw * 0.12, rail_height + rail_thickness, roof_end - l * 0.02),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(cabin_w - hw * 0.12, rail_height, roof_start + l * 0.04),
+        Vec3::new(cabin_w, rail_height + rail_thickness, roof_end - l * 0.02),
     );
 
     build_mesh_with_uvs(positions, normals, indices)
@@ -422,6 +481,40 @@ fn generate_truck_mesh(config: &VehicleMeshConfig) -> Mesh {
         Vec3::new(hw * 0.90, bed_top, rear_bumper - l * 0.02),
     );
 
+    // Front bumper
+    let bumper_height = body_top * 0.55;
+    let bumper_depth = l * 0.04;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.98, bumper_height, front_bumper + l * 0.05),
+    );
+
+    // Side steps
+    let step_height = ground + h * 0.06;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw, ground, windshield_base),
+        Vec3::new(-hw * 0.88, step_height, bed_start),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(hw * 0.88, ground, windshield_base),
+        Vec3::new(hw, step_height, bed_start),
+    );
+
+    // Bed rails
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.95, bed_top, bed_start + l * 0.02),
+        Vec3::new(-hw * 0.86, bed_top + h * 0.05, rear_bumper - l * 0.05),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(hw * 0.86, bed_top, bed_start + l * 0.02),
+        Vec3::new(hw * 0.95, bed_top + h * 0.05, rear_bumper - l * 0.05),
+    );
+
     build_mesh_with_uvs(positions, normals, indices)
 }
 
@@ -478,6 +571,28 @@ fn generate_van_mesh(config: &VehicleMeshConfig) -> Mesh {
         Vec3::new(hw * 0.95, roof_top, rear_bumper - l * 0.02),
     );
 
+    // Front bumper
+    let bumper_height = body_top * 0.55;
+    let bumper_depth = l * 0.035;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.98, bumper_height, front_bumper + l * 0.05),
+    );
+
+    // Side trim
+    let trim_height = ground + h * 0.07;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw, ground, hood_end),
+        Vec3::new(-hw * 0.90, trim_height, rear_bumper - l * 0.05),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(hw * 0.90, ground, hood_end),
+        Vec3::new(hw, trim_height, rear_bumper - l * 0.05),
+    );
+
     build_mesh_with_uvs(positions, normals, indices)
 }
 
@@ -532,6 +647,28 @@ fn generate_bus_mesh(config: &VehicleMeshConfig) -> Mesh {
         body_top,
         roof_top, roof_top * 0.92,
         rear_bumper - l * 0.05, rear_bumper,
+    );
+
+    // Front bumper
+    let bumper_height = body_top * 0.7;
+    let bumper_depth = l * 0.035;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.98, bumper_height, front_bumper + l * 0.06),
+    );
+
+    // Side skirt trim
+    let trim_height = ground + h * 0.06;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw, ground, windshield_top),
+        Vec3::new(-hw * 0.92, trim_height, rear_bumper - l * 0.06),
+    );
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(hw * 0.92, ground, windshield_top),
+        Vec3::new(hw, trim_height, rear_bumper - l * 0.06),
     );
 
     build_mesh_with_uvs(positions, normals, indices)
@@ -603,6 +740,22 @@ fn generate_sports_car_mesh(config: &VehicleMeshConfig) -> Mesh {
         roof_end, rear_end - l * 0.05,
     );
 
+    // Front splitter
+    let splitter_height = ground + h * 0.05;
+    let splitter_depth = l * 0.04;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - splitter_depth),
+        Vec3::new(hw * 0.98, splitter_height, front_bumper + l * 0.05),
+    );
+
+    // Rear diffuser/spoiler
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.92, ground, rear_end - l * 0.06),
+        Vec3::new(hw * 0.92, ground + h * 0.08, rear_end + l * 0.02),
+    );
+
     build_mesh_with_uvs(positions, normals, indices)
 }
 
@@ -670,6 +823,29 @@ fn generate_hatchback_mesh(config: &VehicleMeshConfig) -> Mesh {
         body_top,
         roof_top, body_top + h * 0.05,
         roof_end, rear_bumper - l * 0.03,
+    );
+
+    // Front bumper
+    let bumper_height = body_top * 0.45;
+    let bumper_depth = l * 0.035;
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.98, ground, front_bumper - bumper_depth),
+        Vec3::new(hw * 0.98, bumper_height, front_bumper + l * 0.05),
+    );
+
+    // Rear bumper
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-hw * 0.97, ground, rear_bumper - l * 0.06),
+        Vec3::new(hw * 0.97, bumper_height * 0.95, rear_bumper + l * 0.02),
+    );
+
+    // Roof spoiler
+    add_box(
+        &mut positions, &mut normals, &mut indices,
+        Vec3::new(-cabin_w * 0.8, roof_top, roof_end - l * 0.02),
+        Vec3::new(cabin_w * 0.8, roof_top + h * 0.05, rear_bumper - l * 0.01),
     );
 
     build_mesh_with_uvs(positions, normals, indices)
