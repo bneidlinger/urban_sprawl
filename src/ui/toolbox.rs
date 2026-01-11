@@ -39,12 +39,14 @@ struct ToolButton(ActiveTool);
 struct RoadTypeButton(RoadType);
 
 // UI Colors
-const PANEL_BG: Color = Color::srgba(0.05, 0.07, 0.06, 0.9);
-const BUTTON_IDLE: Color = Color::srgba(0.1, 0.12, 0.11, 0.95);
-const BUTTON_HOVER: Color = Color::srgba(0.15, 0.18, 0.16, 0.95);
-const BUTTON_SELECTED: Color = Color::srgba(0.2, 0.4, 0.3, 0.95);
-const BORDER: Color = Color::srgb(0.0, 0.5, 0.3);
-const TEXT_COLOR: Color = Color::srgb(0.8, 0.95, 0.85);
+const PANEL_BG: Color = Color::srgba(0.02, 0.03, 0.02, 0.94);
+const BUTTON_IDLE: Color = Color::srgba(0.04, 0.06, 0.05, 0.98);
+const BUTTON_HOVER: Color = Color::srgba(0.08, 0.12, 0.1, 0.98);
+const BUTTON_SELECTED: Color = Color::srgba(0.08, 0.18, 0.12, 0.98);
+const BORDER: Color = Color::srgb(0.0, 0.7, 0.4);
+const TEXT_COLOR: Color = Color::srgb(0.7, 1.0, 0.8);
+const MUTED_TEXT: Color = Color::srgb(0.5, 0.75, 0.6);
+const SECTION_TEXT: Color = Color::srgb(1.0, 0.62, 0.2);
 
 fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
@@ -60,19 +62,21 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                 row_gap: Val::Px(6.0),
                 ..default()
             },
+            border: UiRect::all(Val::Px(1.0)),
             BackgroundColor(PANEL_BG),
+            BorderColor(BORDER),
             ToolboxRoot,
         ))
         .with_children(|panel| {
             // Header
             panel.spawn((
-                Text::new("TOOLS"),
+                Text::new("PLAYER TOOLKIT"),
                 TextFont {
                     font: font.clone(),
                     font_size: 14.0,
                     ..default()
                 },
-                TextColor(TEXT_COLOR),
+                TextColor(SECTION_TEXT),
             ));
 
             // Zone tools section
@@ -83,7 +87,7 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.7, 0.65)),
+                TextColor(MUTED_TEXT),
             ));
 
             // Zone buttons
@@ -99,7 +103,7 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.7, 0.65)),
+                TextColor(MUTED_TEXT),
                 Node {
                     margin: UiRect::top(Val::Px(8.0)),
                     ..default()
@@ -120,7 +124,7 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.7, 0.65)),
+                TextColor(MUTED_TEXT),
                 Node {
                     margin: UiRect::top(Val::Px(8.0)),
                     ..default()
@@ -141,7 +145,7 @@ fn setup_toolbox(mut commands: Commands, asset_server: Res<AssetServer>) {
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.7, 0.65)),
+                TextColor(MUTED_TEXT),
                 Node {
                     margin: UiRect::top(Val::Px(8.0)),
                     ..default()

@@ -34,6 +34,8 @@ impl Plugin for UiPlugin {
                     update_frame_stats,
                     update_time_display,
                     update_sim_status,
+                    handle_hud_buttons,
+                    update_hud_button_styles,
                     handle_time_controls,
                     toggle_debug_views,
                 ),
@@ -83,11 +85,40 @@ struct SimStatusText;
 #[derive(Component)]
 struct FrameStatsText;
 
-fn setup_hud(mut commands: Commands) {
-    let panel_bg = Color::srgb(0.04, 0.05, 0.06);
-    let border = Color::srgb(0.0, 0.75, 0.35);
-    let retro_green = Color::srgb(0.4, 0.95, 0.6);
-    let retro_orange = Color::srgb(1.0, 0.6, 0.2);
+#[derive(Component)]
+struct HudButton;
+
+#[derive(Component, Clone, Copy)]
+enum HudAction {
+    TogglePause,
+    SpeedDown,
+    SpeedUp,
+    SetTime(TimePreset),
+    ToggleTensor,
+    ToggleRoadGraph,
+    ToggleFlow,
+    ToggleGrid,
+}
+
+#[derive(Clone, Copy)]
+enum TimePreset {
+    Dawn,
+    Midday,
+    Dusk,
+    Night,
+}
+
+const HUD_PANEL_BG: Color = Color::srgba(0.02, 0.03, 0.02, 0.92);
+const HUD_BORDER: Color = Color::srgb(0.0, 0.75, 0.4);
+const HUD_TEXT: Color = Color::srgb(0.6, 1.0, 0.7);
+const HUD_MUTED: Color = Color::srgb(0.5, 0.7, 0.55);
+const HUD_ACCENT: Color = Color::srgb(1.0, 0.6, 0.2);
+const HUD_BUTTON_IDLE: Color = Color::srgba(0.04, 0.06, 0.04, 0.95);
+const HUD_BUTTON_HOVER: Color = Color::srgba(0.08, 0.12, 0.08, 0.98);
+const HUD_BUTTON_ACTIVE: Color = Color::srgba(0.08, 0.18, 0.12, 0.98);
+
+fn setup_hud(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let font: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
 
     // Top-right HUD stack (moved from left to avoid toolbox overlap)
     commands
@@ -102,56 +133,61 @@ fn setup_hud(mut commands: Commands) {
                 flex_direction: FlexDirection::Column,
                 ..default()
             },
-            BackgroundColor(panel_bg),
-            BorderColor(border),
+            BackgroundColor(HUD_PANEL_BG),
+            BorderColor(HUD_BORDER),
         ))
         .with_children(|parent| {
             parent.spawn((
                 Text::new("URBAN SPRAWL // SYS MONITOR"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 16.0,
                     ..default()
                 },
-                TextColor(retro_orange),
+                TextColor(HUD_ACCENT),
             ));
 
             parent.spawn((
                 Text::new("FPS: --"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 20.0,
                     ..default()
                 },
-                TextColor(retro_green),
+                TextColor(HUD_TEXT),
                 FpsText,
             ));
 
             parent.spawn((
                 Text::new("--:-- --"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 20.0,
                     ..default()
                 },
-                TextColor(retro_green),
+                TextColor(HUD_TEXT),
                 TimeText,
             ));
 
             parent.spawn((
                 Text::new("SIM: 1.0x | TIME: 0.5x"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 16.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.75, 0.95, 0.8)),
+                TextColor(HUD_TEXT),
                 SimStatusText,
             ));
 
             parent.spawn((
                 Text::new("[P] Pause | [ [ / ] ] Time | [1-4] Dawn/Day/Dusk/Night"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 14.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.7, 0.8, 0.7)),
+                TextColor(HUD_MUTED),
                 DebugInfoText,
             ));
 
@@ -159,31 +195,109 @@ fn setup_hud(mut commands: Commands) {
             parent.spawn((
                 Text::new("--- RENDER STATS ---"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 12.0,
                     ..default()
                 },
-                TextColor(retro_orange),
+                TextColor(HUD_ACCENT),
             ));
 
             parent.spawn((
                 Text::new("Entities: -- | Meshes: -- | Culled: --"),
                 TextFont {
+                    font: font.clone(),
                     font_size: 14.0,
                     ..default()
                 },
-                TextColor(Color::srgb(0.6, 0.9, 0.7)),
+                TextColor(HUD_TEXT),
                 FrameStatsText,
             ));
+        });
+
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                top: Val::Px(200.0),
+                right: Val::Px(10.0),
+                padding: UiRect::all(Val::Px(10.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                row_gap: Val::Px(8.0),
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            BackgroundColor(HUD_PANEL_BG),
+            BorderColor(HUD_BORDER),
+        ))
+        .with_children(|panel| {
+            panel.spawn((
+                Text::new("SIM CONTROLS"),
+                TextFont {
+                    font: font.clone(),
+                    font_size: 14.0,
+                    ..default()
+                },
+                TextColor(HUD_ACCENT),
+            ));
+
+            panel
+                .spawn((Node {
+                    column_gap: Val::Px(6.0),
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                },))
+                .with_children(|row| {
+                    spawn_hud_button(row, &font, "PAUSE", HudAction::TogglePause);
+                    spawn_hud_button(row, &font, "SLOW", HudAction::SpeedDown);
+                    spawn_hud_button(row, &font, "FAST", HudAction::SpeedUp);
+                });
+
+            panel
+                .spawn((Node {
+                    column_gap: Val::Px(6.0),
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                },))
+                .with_children(|row| {
+                    spawn_hud_button(row, &font, "DAWN", HudAction::SetTime(TimePreset::Dawn));
+                    spawn_hud_button(row, &font, "DAY", HudAction::SetTime(TimePreset::Midday));
+                    spawn_hud_button(row, &font, "DUSK", HudAction::SetTime(TimePreset::Dusk));
+                    spawn_hud_button(row, &font, "NIGHT", HudAction::SetTime(TimePreset::Night));
+                });
+
+            panel.spawn((
+                Text::new("OVERLAYS"),
+                TextFont {
+                    font: font.clone(),
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(HUD_MUTED),
+            ));
+
+            panel
+                .spawn((Node {
+                    column_gap: Val::Px(6.0),
+                    flex_direction: FlexDirection::Row,
+                    ..default()
+                },))
+                .with_children(|row| {
+                    spawn_hud_button(row, &font, "GRID", HudAction::ToggleGrid);
+                    spawn_hud_button(row, &font, "FLOW", HudAction::ToggleFlow);
+                    spawn_hud_button(row, &font, "TENSOR", HudAction::ToggleTensor);
+                    spawn_hud_button(row, &font, "ROADS", HudAction::ToggleRoadGraph);
+                });
         });
 
     // Bottom control reminder
     commands.spawn((
         Text::new("WASD: Pan | Scroll: Zoom | Q/E: Rotate | F: Flow | G: Grid"),
         TextFont {
+            font: font.clone(),
             font_size: 14.0,
             ..default()
         },
-        TextColor(Color::srgb(0.65, 0.85, 0.7)),
+        TextColor(HUD_MUTED),
         Node {
             position_type: PositionType::Absolute,
             bottom: Val::Px(10.0),
@@ -191,6 +305,124 @@ fn setup_hud(mut commands: Commands) {
             ..default()
         },
     ));
+}
+
+fn spawn_hud_button(
+    parent: &mut ChildBuilder,
+    font: &Handle<Font>,
+    label: &str,
+    action: HudAction,
+) {
+    parent
+        .spawn((
+            Button,
+            Node {
+                padding: UiRect::axes(Val::Px(8.0), Val::Px(6.0)),
+                border: UiRect::all(Val::Px(1.0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            BackgroundColor(HUD_BUTTON_IDLE),
+            BorderColor(HUD_BORDER),
+            HudButton,
+            action,
+        ))
+        .with_children(|button| {
+            button.spawn((
+                Text::new(label),
+                TextFont {
+                    font: font.clone(),
+                    font_size: 12.0,
+                    ..default()
+                },
+                TextColor(HUD_TEXT),
+            ));
+        });
+}
+
+fn handle_hud_buttons(
+    interactions: Query<(&Interaction, &HudAction), (Changed<Interaction>, With<Button>)>,
+    mut tod: ResMut<TimeOfDay>,
+    mut sim: ResMut<SimulationConfig>,
+    mut debug: ResMut<DebugConfig>,
+) {
+    for (interaction, action) in &interactions {
+        if *interaction != Interaction::Pressed {
+            continue;
+        }
+
+        match *action {
+            HudAction::TogglePause => {
+                tod.paused = !tod.paused;
+                sim.paused = tod.paused;
+            }
+            HudAction::SpeedDown => {
+                tod.speed = (tod.speed * 0.5).clamp(0.05, 8.0);
+                sim.speed = (sim.speed * 0.5).clamp(0.1, 8.0);
+            }
+            HudAction::SpeedUp => {
+                tod.speed = (tod.speed * 2.0).clamp(0.05, 8.0);
+                sim.speed = (sim.speed * 2.0).clamp(0.1, 8.0);
+            }
+            HudAction::SetTime(preset) => match preset {
+                TimePreset::Dawn => tod.time = 0.20,
+                TimePreset::Midday => tod.time = 0.5,
+                TimePreset::Dusk => tod.time = 0.75,
+                TimePreset::Night => tod.time = 0.95,
+            },
+            HudAction::ToggleTensor => {
+                debug.show_tensor_field = !debug.show_tensor_field;
+            }
+            HudAction::ToggleRoadGraph => {
+                debug.show_road_graph = !debug.show_road_graph;
+            }
+            HudAction::ToggleFlow => {
+                debug.show_flow_fields = !debug.show_flow_fields;
+            }
+            HudAction::ToggleGrid => {
+                debug.show_grid = !debug.show_grid;
+            }
+        }
+    }
+}
+
+fn update_hud_button_styles(
+    sim: Res<SimulationConfig>,
+    tod: Res<TimeOfDay>,
+    debug: Res<DebugConfig>,
+    mut buttons: Query<(&HudAction, &Interaction, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    for (action, interaction, mut bg, mut border) in &mut buttons {
+        let is_active = match action {
+            HudAction::TogglePause => sim.paused || tod.paused,
+            HudAction::ToggleTensor => debug.show_tensor_field,
+            HudAction::ToggleRoadGraph => debug.show_road_graph,
+            HudAction::ToggleFlow => debug.show_flow_fields,
+            HudAction::ToggleGrid => debug.show_grid,
+            HudAction::SpeedDown | HudAction::SpeedUp | HudAction::SetTime(_) => false,
+        };
+
+        bg.0 = match *interaction {
+            Interaction::Pressed => HUD_BUTTON_ACTIVE,
+            Interaction::Hovered => {
+                if is_active {
+                    HUD_BUTTON_ACTIVE
+                } else {
+                    HUD_BUTTON_HOVER
+                }
+            }
+            Interaction::None => {
+                if is_active {
+                    HUD_BUTTON_ACTIVE
+                } else {
+                    HUD_BUTTON_IDLE
+                }
+            }
+        };
+
+        border.0 = if is_active { HUD_ACCENT } else { HUD_BORDER };
+    }
 }
 
 fn update_fps_counter(
