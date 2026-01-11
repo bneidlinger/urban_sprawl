@@ -5,6 +5,7 @@
 
 use bevy::prelude::*;
 
+mod audio;
 mod camera;
 mod game_state;
 mod procgen;
@@ -42,5 +43,7 @@ fn main() {
         .add_plugins(world::WorldPlugin)
         // Debug UI
         .add_plugins(ui::UiPlugin)
+        // Ambient audio
+        .add_plugins(audio::AudioPlugin)
         .run();
 }

@@ -11,7 +11,8 @@
 - **Camera System**: Isometric view with pan/zoom/rotate + mouse panning
 - **Day/Night Cycle**: Dynamic sun lighting with window illumination
 - **Water System**: Procedural river with animated shader and bridges
-- **Moving Vehicles**: Cars with traffic light awareness
+- **Moving Vehicles**: Cars with traffic light awareness and realistic angular meshes
+- **Parked Vehicles**: Variety of parked cars with proper wheel placement
 - **Pedestrians**: Citizens walking on sidewalks
 - **Visual Effects**: Tilt-shift, cloud shadows, building shadows
 - **Rooftop Details**: AC units, antennas, water towers
@@ -39,7 +40,7 @@
 - [x] Sky color gradient (dawn → day → dusk → night)
 - [x] Street lamp activation at night (emissive intensity ramp)
 - [x] Building window lights at night (random pattern)
-- [ ] Moon and stars for night sky
+- [x] Moon and stars for night sky ✅
 
 ### 1.2 Weather System ✅
 - [x] Fog/haze for depth and atmosphere ✅
@@ -50,11 +51,11 @@
 - [x] Automatic weather cycling (10-30 min) ✅
 - [x] Keyboard controls (F, F5-F8, Shift+F) ✅
 
-### 1.3 Enhanced Lighting
+### 1.3 Enhanced Lighting ✅
 - [ ] Ambient occlusion for building bases
-- [ ] Bloom effect for lights at night
-- [ ] Colored accent lighting (neon signs, storefronts)
-- [ ] Car headlights/taillights
+- [x] Bloom effect for lights at night ✅
+- [x] Colored accent lighting (neon signs, storefronts) ✅
+- [x] Car headlights/taillights ✅
 
 ### 1.4 Water Features ✅
 - [x] Rivers cutting through city
@@ -67,31 +68,37 @@
 
 ## Phase 2: Building & Architecture Detail
 
-### 2.1 Facade Details
+### 2.1 Facade Details ✅
 - [x] Window grid patterns on buildings ✅
-- [ ] Balconies on residential buildings
-- [ ] Storefronts with awnings on commercial ground floors
+- [x] Balconies on residential buildings ✅
+- [x] Storefronts with awnings on commercial ground floors ✅
 - [x] Rooftop details (AC units, water towers, helipads) ✅
 - [x] Antenna/spire variations on tall buildings ✅
 
 ### 2.2 Landmark Buildings
-- [ ] Unique procedural landmarks (clock towers, monuments)
-- [ ] Churches/temples with distinct silhouettes
+- [x] Unique procedural landmarks (clock towers, monuments) ✅
+- [x] Churches/temples with distinct silhouettes ✅
 - [ ] Stadium/arena structures
 - [ ] Train stations with platforms
 - [ ] Iconic skyscrapers with distinctive tops
 
-### 2.3 Building Textures
-- [ ] Procedural facade textures (brick, glass, concrete)
+### 2.3 Building Textures ✅
+- [x] Procedural facade textures (brick, glass, concrete, metal, painted) ✅
+- [x] PBR+ material system (roughness, metallic, height maps) ✅
+- [x] Parallax Occlusion Mapping for surface depth ✅
+- [x] Cook-Torrance BRDF lighting ✅
 - [ ] Wear/weathering variation
-- [ ] Graffiti on industrial buildings
-- [ ] Billboards and advertisements
+- [x] Graffiti on industrial buildings ✅
+- [x] Billboards and advertisements ✅
 
-### 2.4 Construction Sites
-- [ ] Crane meshes
-- [ ] Scaffolding around "under construction" buildings
-- [ ] Foundation pits
-- [ ] Construction barriers
+### 2.4 Construction Sites ✅
+- [x] Crane meshes (mast, jib, counter-weight) ✅
+- [x] Scaffolding around "under construction" buildings ✅
+- [x] Foundation pits ✅
+- [x] Construction barriers ✅
+- [x] Integration with zone growth simulation ✅
+- [x] Construction progress phases (Foundation → Structure → Enclosure → Finishing) ✅
+- [x] Partial building mesh grows with progress ✅
 
 ---
 
@@ -100,59 +107,61 @@
 ### 3.1 Moving Vehicles ✅
 - [x] Cars driving on roads (waypoint navigation)
 - [x] Traffic light response (stop on red)
-- [ ] Lane changing behavior
-- [ ] Vehicle variety (sedans, SUVs, trucks, buses)
-- [ ] Emergency vehicles with sirens
+- [x] Lane changing behavior ✅
+- [x] Vehicle variety (sedans, SUVs, trucks, vans, buses) ✅
+- [x] Emergency vehicles with sirens/lights (police, fire, ambulance) ✅
+- [x] Realistic angular vehicle meshes (box-based geometry) ✅
+- [x] Proper wheel meshes at vehicle corners ✅
 
-### 3.2 Public Transit
-- [ ] Bus stops with shelters
-- [ ] Buses following routes
-- [ ] Elevated train tracks
-- [ ] Train cars moving on tracks
-- [ ] Subway station entrances
+### 3.2 Public Transit ✅
+- [x] Bus stops with shelters ✅
+- [x] Buses following routes ✅
+- [x] Elevated train tracks ✅
+- [x] Train cars moving on tracks ✅
+- [x] Subway station entrances ✅
 
 ### 3.3 Pedestrians ✅
 - [x] Walking citizens on sidewalks
-- [ ] Crosswalk usage (wait for signal)
-- [ ] Crowd density near commercial areas
+- [x] Crosswalk usage (wait for signal) ✅
+- [x] Crowd density near commercial areas ✅
 - [x] Simple low-poly character models
 
 ### 3.4 Parking Infrastructure
-- [ ] Parking lots (surface lots in suburbs)
-- [ ] Parking garages (multi-story structures)
+- [x] Parking lots (surface lots in suburbs) ✅
+- [x] Parking garages (multi-story structures) ✅
 - [ ] Cars entering/exiting parking
 
 ---
 
-## Phase 4: Urban Life Details
+## Phase 4: Urban Life Details ✅
 
-### 4.1 Street-Level Details
-- [ ] Newspaper stands
-- [ ] Food carts/vendors
-- [ ] Bus shelters
-- [ ] Phone booths / charging stations
-- [ ] Bike racks with bikes
-- [ ] Outdoor café seating
+### 4.1 Street-Level Details ✅
+- [x] Newspaper stands ✅
+- [x] Food carts/vendors ✅
+- [x] Bus shelters ✅
+- [x] Phone booths / charging stations ✅
+- [x] Bike racks with bikes ✅
+- [x] Outdoor café seating ✅
 
-### 4.2 Signage & Wayfinding
-- [ ] Street name signs at intersections
-- [ ] One-way signs
-- [ ] Speed limit signs
-- [ ] Highway exit signs
-- [ ] Business signs on buildings
+### 4.2 Signage & Wayfinding ✅
+- [x] Street name signs at intersections ✅
+- [x] One-way signs ✅
+- [x] Speed limit signs ✅
+- [x] Highway exit signs
+- [x] Business signs on buildings
 
-### 4.3 Utilities
-- [ ] Power lines and poles (suburban areas)
-- [ ] Manholes on roads
-- [ ] Storm drains at curbs
-- [ ] Utility boxes on sidewalks
+### 4.3 Utilities ✅
+- [x] Power lines and poles (suburban areas) ✅
+- [x] Manholes on roads ✅
+- [x] Storm drains at curbs ✅
+- [x] Utility boxes on sidewalks ✅
 
-### 4.4 Nature Integration
+### 4.4 Nature Integration ✅
 - [x] Street trees along sidewalks ✅
-- [ ] Planters and flower beds
-- [ ] Community gardens
-- [ ] Green roofs on some buildings
-- [ ] Bird flocks (simple particle system)
+- [x] Planters and flower beds ✅
+- [x] Community gardens
+- [x] Green roofs on some buildings ✅
+- [x] Bird flocks (simple particle system) ✅
 
 ---
 
@@ -199,11 +208,14 @@
 - [ ] Voxel-style building option
 - [ ] Low-poly aesthetic mode
 
-### 6.3 Camera Effects
+### 6.3 Camera Effects ✅
+- [x] Vignette (cinematic polish plugin) ✅
+- [x] Film grain (animated procedural noise) ✅
+- [x] Chromatic aberration (edge color fringing) ✅
+- [x] Tonemapping options (TonyMcMapface, AgX, ACES, Reinhard) ✅
 - [ ] Depth of field
 - [ ] Motion blur on pan
 - [ ] Screen-space reflections
-- [ ] Vignette
 
 ### 6.4 Audio (Future)
 - [ ] Ambient city sounds
@@ -231,10 +243,10 @@
 
 ### Medium Term
 11. Public transit system
-12. Landmark buildings
+12. Landmark buildings ✅
 13. Full traffic simulation
 14. Citizen agents
-15. Signage and billboards
+15. Signage and billboards ✅
 
 ### Long Term
 16. Economic simulation
@@ -297,6 +309,31 @@ A comprehensive GPU-driven rendering infrastructure has been implemented to achi
 - GpuCullingNode render graph node for compute pass execution
 - ExtractedCullData for main-to-render world data extraction
 - Zero CPU involvement in visibility determination
+
+#### Phase 8: PBR+ Materials ✅
+- Extended `FacadeTextureArray` with roughness, metallic, and height maps (R8Unorm)
+- `BuildingInstancedMaterial` with 5 texture array bindings (albedo, normal, roughness, metallic, height)
+- `BuildingMaterialUniforms` struct with POM parameters (scale, layers)
+- Parallax Occlusion Mapping in `building_instanced.wgsl`:
+  - Ray marching through height field with layer interpolation
+  - Per-facade depth scales (brick 0.06, metal 0.04, concrete 0.02)
+  - Distance-based LOD (64→8 layers, disabled beyond 150m)
+  - POM self-shadowing for recessed areas
+- Cook-Torrance BRDF lighting:
+  - GGX/Trowbridge-Reitz normal distribution
+  - Smith's Schlick-GGX geometry function
+  - Fresnel-Schlick approximation
+- `BuildingPbrMaterialHandle` resource for material initialization
+
+#### Phase 9: Cinematic Post-Processing ✅
+- `CinematicPolishPlugin` with combined single-pass shader
+- Film grain: Animated hash-based noise, luminance-aware intensity
+- Vignette: Radial falloff with configurable radius/softness
+- Chromatic aberration: Distance-scaled RGB channel offset
+- Time-of-day modulation (effects intensify at night)
+- Render graph integration after tilt-shift, before EndMainPassPostProcessing
+- `TonemappingConfig` with multiple modes (TonyMcMapface, AgX, ACES, Reinhard)
+- `TaaConfig` for Temporal Anti-Aliasing (requires perspective camera)
 
 ### Performance Targets
 | Component | Metric | Target |

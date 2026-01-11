@@ -76,4 +76,8 @@ pub struct VehicleNavigation {
     pub previous_node: Option<NodeIndex>,
     /// Whether the vehicle should be stopping (for traffic lights).
     pub stopping: bool,
+    /// Current lane offset from road center (positive = right, negative = left).
+    pub lane_offset: f32,
+    /// Target lane offset (for smooth lane changes).
+    pub target_lane_offset: f32,
 }

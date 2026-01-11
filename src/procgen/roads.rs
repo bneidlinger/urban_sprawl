@@ -223,4 +223,43 @@ impl RoadGraph {
     pub fn edges_of_node(&self, idx: NodeIndex) -> impl Iterator<Item = EdgeIndex> + '_ {
         self.graph.edges(idx).map(|e| e.id())
     }
+
+    /// Remove an edge by its index. Returns the edge data if it existed.
+    pub fn remove_edge(&mut self, idx: EdgeIndex) -> Option<RoadEdge> {
+        self.graph.remove_edge(idx)
+    }
+
+    /// Remove a node by its index. Returns the node data if it existed.
+    /// Note: This also removes all edges connected to this node.
+    pub fn remove_node(&mut self, idx: NodeIndex) -> Option<RoadNode> {
+        // Remove from spatial index
+        self.node_positions.retain(|(node_idx, _)| *node_idx != idx);
+        self.graph.remove_node(idx)
+    }
+
+    /// Find the edge index between two nodes.
+    pub fn find_edge(&self, a: NodeIndex, b: NodeIndex) -> Option<EdgeIndex> {
+        self.graph.find_edge(a, b)
+    }
+
+    /// Check if a node has any connected edges.
+    pub fn node_has_edges(&self, idx: NodeIndex) -> bool {
+        self.graph.edges(idx).next().is_some()
+    }
+
+    /// Get the degree (number of connected edges) of a node.
+    pub fn node_degree(&self, idx: NodeIndex) -> usize {
+        self.graph.edges(idx).count()
+    }
+
+    /// Re-add a node at a specific index (for undo). Returns the new NodeIndex.
+    /// Note: The index may differ from the original if graph was modified.
+    pub fn restore_node(&mut self, position: Vec2, node_type: RoadNodeType) -> NodeIndex {
+        self.add_node(position, node_type)
+    }
+
+    /// Add an edge with full RoadEdge data (for undo/redo).
+    pub fn add_edge_data(&mut self, a: NodeIndex, b: NodeIndex, edge: RoadEdge) -> EdgeIndex {
+        self.graph.add_edge(a, b, edge)
+    }
 }

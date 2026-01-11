@@ -1,12 +1,118 @@
 //! Flow field (Dijkstra map) for agent navigation.
 //!
 //! All agents heading to the same destination share a single flow field.
-
-#![allow(dead_code)]
+//! Flow fields are generated for key destinations (commercial districts,
+//! parks, transit hubs) and cached for reuse.
 
 use bevy::prelude::*;
-use std::collections::{BinaryHeap, HashMap};
 use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
+
+use crate::procgen::building_factory::BuildingArchetype;
+use crate::render::building_spawner::{Building, BuildingsSpawned};
+
+pub struct FlowFieldPlugin;
+
+impl Plugin for FlowFieldPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<FlowFieldCache>()
+            .init_resource::<FlowFieldConfig>()
+            .init_resource::<CityFlowFields>()
+            .add_systems(Update, initialize_city_flow_fields.run_if(should_init_flow_fields));
+    }
+}
+
+/// Configuration for flow field generation.
+#[derive(Resource)]
+pub struct FlowFieldConfig {
+    /// Grid cell size in world units.
+    pub cell_size: f32,
+    /// Grid extent from origin in each direction.
+    pub grid_extent: f32,
+    /// Maximum distance to consider in flow field.
+    pub max_distance: f32,
+}
+
+impl Default for FlowFieldConfig {
+    fn default() -> Self {
+        Self {
+            cell_size: 5.0,
+            grid_extent: 250.0, // -250 to +250 world units
+            max_distance: 500.0,
+        }
+    }
+}
+
+/// Pre-computed flow fields for common destinations.
+#[derive(Resource, Default)]
+pub struct CityFlowFields {
+    /// Flow field toward commercial buildings (for shopping).
+    pub to_commercial: Option<FlowField>,
+    /// Flow field toward parks/leisure.
+    pub to_parks: Option<FlowField>,
+    /// Whether flow fields have been generated.
+    pub initialized: bool,
+}
+
+fn should_init_flow_fields(
+    buildings_spawned: Res<BuildingsSpawned>,
+    flow_fields: Res<CityFlowFields>,
+) -> bool {
+    buildings_spawned.0 && !flow_fields.initialized
+}
+
+/// Generate city-wide flow fields once buildings are placed.
+fn initialize_city_flow_fields(
+    config: Res<FlowFieldConfig>,
+    buildings: Query<(&Building, &Transform)>,
+    mut flow_fields: ResMut<CityFlowFields>,
+) {
+    flow_fields.initialized = true;
+
+    let grid_size = (config.grid_extent * 2.0 / config.cell_size) as usize;
+    let origin = Vec2::new(-config.grid_extent, -config.grid_extent);
+
+    // Collect commercial building positions as goals
+    let commercial_goals: Vec<(usize, usize)> = buildings
+        .iter()
+        .filter(|(b, _)| b.building_type == BuildingArchetype::Commercial)
+        .filter_map(|(_, t)| {
+            let pos = Vec2::new(t.translation.x, t.translation.z);
+            world_to_grid(pos, origin, config.cell_size, grid_size)
+        })
+        .collect();
+
+    if !commercial_goals.is_empty() {
+        flow_fields.to_commercial = Some(generate_flow_field(
+            grid_size,
+            grid_size,
+            config.cell_size,
+            origin,
+            &commercial_goals,
+            None,
+        ));
+        info!(
+            "Generated flow field to {} commercial locations ({}x{} grid)",
+            commercial_goals.len(),
+            grid_size,
+            grid_size
+        );
+    }
+
+    // Could add park flow fields here if parks have markers
+}
+
+fn world_to_grid(pos: Vec2, origin: Vec2, cell_size: f32, grid_size: usize) -> Option<(usize, usize)> {
+    let local = pos - origin;
+    let gx = (local.x / cell_size).floor() as isize;
+    let gy = (local.y / cell_size).floor() as isize;
+
+    if gx >= 0 && gy >= 0 && (gx as usize) < grid_size && (gy as usize) < grid_size {
+        Some((gx as usize, gy as usize))
+    } else {
+        None
+    }
+}
 
 /// A flow field resource for a specific destination.
 #[derive(Clone)]

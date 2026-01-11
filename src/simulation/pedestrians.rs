@@ -9,9 +9,12 @@ use petgraph::graph::{EdgeIndex, NodeIndex};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
+use crate::procgen::building_factory::BuildingArchetype;
 use crate::procgen::roads::{RoadGraph, RoadNodeType, RoadType};
+use crate::render::building_spawner::Building;
 use crate::render::instancing::TerrainConfig;
 use crate::render::road_mesh::RoadMeshGenerated;
+use crate::render::traffic_lights::{TrafficLightController, LightPhase};
 
 pub struct PedestrianPlugin;
 
@@ -23,6 +26,7 @@ impl Plugin for PedestrianPlugin {
                 Update,
                 (
                     spawn_pedestrians.run_if(should_spawn_pedestrians),
+                    check_crosswalk_waiting,
                     pedestrian_movement,
                     pedestrian_edge_transition,
                     pedestrian_transform_sync,
@@ -46,6 +50,10 @@ pub struct PedestrianNavigation {
     pub side: f32,  // 1.0 or -1.0 for left/right sidewalk
     pub destination_node: NodeIndex,
     pub previous_node: Option<NodeIndex>,
+    /// True if pedestrian is waiting at a crosswalk.
+    pub waiting_at_crosswalk: bool,
+    /// Time spent waiting (for impatient crossing).
+    pub wait_time: f32,
 }
 
 /// Configuration for pedestrians.
@@ -59,6 +67,10 @@ pub struct PedestrianConfig {
     pub head_radius: f32,
     pub sidewalk_offset: f32,
     pub seed: u64,
+    /// Radius to check for commercial buildings for crowd density.
+    pub commercial_crowd_radius: f32,
+    /// Multiplier for spawn chance near commercial buildings.
+    pub commercial_crowd_multiplier: f32,
 }
 
 impl Default for PedestrianConfig {
@@ -72,6 +84,8 @@ impl Default for PedestrianConfig {
             head_radius: 0.15,
             sidewalk_offset: 4.0,    // Distance from road center to sidewalk
             seed: 88888,
+            commercial_crowd_radius: 40.0,
+            commercial_crowd_multiplier: 3.0,
         }
     }
 }
@@ -120,6 +134,7 @@ fn spawn_pedestrians(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     pedestrian_query: Query<&Pedestrian>,
+    buildings_query: Query<(&Building, &Transform)>,
     mut initialized: ResMut<PedestriansInitialized>,
     mut local_rng: Local<Option<StdRng>>,
 ) {
@@ -131,13 +146,31 @@ fn spawn_pedestrians(
         return;
     }
 
+    // Collect commercial building positions for crowd density
+    let commercial_positions: Vec<Vec2> = buildings_query
+        .iter()
+        .filter(|(b, _)| b.building_type == BuildingArchetype::Commercial)
+        .map(|(_, t)| Vec2::new(t.translation.x, t.translation.z))
+        .collect();
+
     // Collect valid nodes (intersections or endpoints on Major/Minor roads)
-    let valid_nodes: Vec<NodeIndex> = road_graph
+    // and calculate crowd weight based on proximity to commercial areas
+    let valid_nodes: Vec<(NodeIndex, f32)> = road_graph
         .nodes()
         .filter_map(|(idx, node)| {
             let neighbor_count = road_graph.neighbors(idx).count();
             if neighbor_count >= 1 && node.node_type != RoadNodeType::DeadEnd {
-                Some(idx)
+                // Calculate crowd weight based on nearby commercial buildings
+                let node_pos = node.position;
+                let mut weight = 1.0;
+                for &comm_pos in &commercial_positions {
+                    let dist = node_pos.distance(comm_pos);
+                    if dist < config.commercial_crowd_radius {
+                        let proximity = 1.0 - (dist / config.commercial_crowd_radius);
+                        weight += proximity * (config.commercial_crowd_multiplier - 1.0);
+                    }
+                }
+                Some((idx, weight))
             } else {
                 None
             }
@@ -150,6 +183,9 @@ fn spawn_pedestrians(
         return;
     }
 
+    // Calculate total weight for weighted random selection
+    let total_weight: f32 = valid_nodes.iter().map(|(_, w)| w).sum();
+
     // Create meshes
     let body_mesh = meshes.add(Cylinder::new(config.body_radius, config.body_height));
     let head_mesh = meshes.add(Sphere::new(config.head_radius));
@@ -160,8 +196,17 @@ fn spawn_pedestrians(
     let to_spawn = (config.target_count - current_count).min(10);
 
     for _ in 0..to_spawn {
-        // Pick random starting node
-        let start_node_idx = valid_nodes[rng.gen_range(0..valid_nodes.len())];
+        // Pick random starting node with weighted selection (favor commercial areas)
+        let roll: f32 = rng.gen::<f32>() * total_weight;
+        let mut cumulative = 0.0;
+        let mut start_node_idx = valid_nodes[0].0;
+        for &(node, weight) in &valid_nodes {
+            cumulative += weight;
+            if roll < cumulative {
+                start_node_idx = node;
+                break;
+            }
+        }
 
         // Get edges from this node (prefer Major/Minor roads with sidewalks)
         let edges: Vec<EdgeIndex> = road_graph
@@ -247,6 +292,8 @@ fn spawn_pedestrians(
                 side,
                 destination_node: dest_node,
                 previous_node: Some(start_node_idx),
+                waiting_at_crosswalk: false,
+                wait_time: 0.0,
             },
         ));
 
@@ -265,6 +312,64 @@ fn spawn_pedestrians(
     }
 }
 
+/// Check if pedestrians should wait at crosswalks based on traffic light state.
+fn check_crosswalk_waiting(
+    time: Res<Time>,
+    road_graph: Res<RoadGraph>,
+    traffic_lights: Query<&TrafficLightController>,
+    mut pedestrians: Query<&mut PedestrianNavigation, With<Pedestrian>>,
+) {
+    let dt = time.delta_secs();
+
+    // How close to edge end before checking crosswalk (0.95 = 95% progress)
+    const CROSSWALK_CHECK_THRESHOLD: f32 = 0.92;
+    // Maximum wait time before pedestrian crosses anyway (impatient)
+    const MAX_WAIT_TIME: f32 = 15.0;
+
+    for mut nav in pedestrians.iter_mut() {
+        // Check if approaching end of edge (intersection)
+        let near_end = if nav.forward {
+            nav.progress >= CROSSWALK_CHECK_THRESHOLD
+        } else {
+            nav.progress <= (1.0 - CROSSWALK_CHECK_THRESHOLD)
+        };
+
+        if !near_end {
+            // Not near intersection, reset wait state
+            nav.waiting_at_crosswalk = false;
+            nav.wait_time = 0.0;
+            continue;
+        }
+
+        // Find traffic light controller for destination node
+        let mut should_wait = false;
+        for controller in traffic_lights.iter() {
+            if controller.node_index == nav.destination_node {
+                // Check if pedestrian should wait (not green for pedestrians)
+                // Pedestrians cross when traffic is red (traffic stops)
+                if controller.phase != LightPhase::Red {
+                    should_wait = true;
+                }
+                break;
+            }
+        }
+
+        // Update wait time
+        if should_wait {
+            nav.wait_time += dt;
+            // Allow impatient crossing after max wait
+            if nav.wait_time < MAX_WAIT_TIME {
+                nav.waiting_at_crosswalk = true;
+            } else {
+                nav.waiting_at_crosswalk = false;
+            }
+        } else {
+            nav.waiting_at_crosswalk = false;
+            nav.wait_time = 0.0;
+        }
+    }
+}
+
 /// Advance pedestrian progress along their current edge.
 fn pedestrian_movement(
     time: Res<Time>,
@@ -274,6 +379,11 @@ fn pedestrian_movement(
     let dt = time.delta_secs();
 
     for mut nav in pedestrians.iter_mut() {
+        // Don't move if waiting at crosswalk
+        if nav.waiting_at_crosswalk {
+            continue;
+        }
+
         let Some(edge) = road_graph.edge_by_index(nav.current_edge) else {
             continue;
         };
@@ -356,6 +466,8 @@ fn pedestrian_edge_transition(
         nav.forward = forward;
         nav.progress = if forward { 0.0 } else { 1.0 };
         nav.destination_node = dest_node;
+        nav.waiting_at_crosswalk = false;
+        nav.wait_time = 0.0;
     }
 }
 

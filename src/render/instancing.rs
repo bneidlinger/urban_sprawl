@@ -11,7 +11,7 @@ use bevy::{
         mesh::{Indices, MeshVertexBufferLayoutRef, PrimitiveTopology},
         render_asset::RenderAssetUsages,
         render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderRef,
+            AsBindGroup, RenderPipelineDescriptor, ShaderRef, ShaderType,
             SpecializedMeshPipelineError, VertexBufferLayout, VertexFormat,
             VertexStepMode,
         },
@@ -22,6 +22,7 @@ use bytemuck::{Pod, Zeroable};
 use noise::{NoiseFn, Perlin};
 
 use crate::procgen::river::River;
+use crate::render::facade_textures::{FacadeTextureArray, FacadeTexturesGenerated};
 
 // Re-export building instance types for convenience
 pub use crate::render::building_instances::{
@@ -33,12 +34,12 @@ pub struct InstancingPlugin;
 impl Plugin for InstancingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(MaterialPlugin::<InstancedMaterial>::default())
-            // BuildingInstancedMaterial disabled - shader needs proper Bevy Material integration
-            // TODO: Fix building_instanced.wgsl to align with Bevy's material binding expectations
-            // .add_plugins(MaterialPlugin::<BuildingInstancedMaterial>::default())
+            .add_plugins(MaterialPlugin::<BuildingInstancedMaterial>::default())
             .init_resource::<InstancingConfig>()
             .init_resource::<TerrainConfig>()
-            .add_systems(PostStartup, setup_instanced_cubes);
+            .init_resource::<BuildingPbrMaterialHandle>()
+            .add_systems(PostStartup, setup_instanced_cubes)
+            .add_systems(Update, initialize_building_pbr_material.run_if(should_init_pbr_material));
     }
 }
 
@@ -157,51 +158,88 @@ impl Material for InstancedMaterial {
     }
 }
 
-/// Extended material for building instancing with full transform matrix support.
+/// Uniform data for building material shader.
+/// Packed into a single struct for proper GPU binding.
+#[derive(Clone, Copy, Default, ShaderType)]
+pub struct BuildingMaterialUniforms {
+    pub base_color: LinearRgba,
+    pub time_of_day: f32,
+    pub use_textures: f32,
+    pub pom_scale: f32,      // Parallax Occlusion Mapping depth scale (0.02-0.1)
+    pub pom_layers: f32,     // Number of POM ray march steps (16-64)
+}
+
+/// Extended material for building instancing with full PBR+ support.
 /// Uses the extended shader at shaders/building_instanced.wgsl
 #[derive(Asset, TypePath, AsBindGroup, Clone)]
 pub struct BuildingInstancedMaterial {
+    /// All uniform values packed into a single binding
     #[uniform(0)]
-    pub base_color: LinearRgba,
-    #[uniform(0)]
-    pub time_of_day: f32,
-    #[uniform(0)]
-    pub use_textures: f32,
+    pub uniforms: BuildingMaterialUniforms,
 
-    /// Facade albedo texture array (optional)
+    /// Facade albedo texture array (5 layers for facade types)
     #[texture(1, dimension = "2d_array")]
-    #[sampler(3)]
+    #[sampler(6)]
     pub facade_albedo: Option<Handle<Image>>,
 
-    /// Facade normal texture array (optional)
+    /// Facade normal texture array (5 layers)
     #[texture(2, dimension = "2d_array")]
     pub facade_normal: Option<Handle<Image>>,
+
+    /// Facade roughness texture array (5 layers, R8)
+    #[texture(3, dimension = "2d_array")]
+    pub facade_roughness: Option<Handle<Image>>,
+
+    /// Facade metallic texture array (5 layers, R8)
+    #[texture(4, dimension = "2d_array")]
+    pub facade_metallic: Option<Handle<Image>>,
+
+    /// Facade height/displacement texture array (5 layers, R8) for POM
+    #[texture(5, dimension = "2d_array")]
+    pub facade_height: Option<Handle<Image>>,
 }
 
 impl Default for BuildingInstancedMaterial {
     fn default() -> Self {
         Self {
-            base_color: LinearRgba::WHITE,
-            time_of_day: 0.5,
-            use_textures: 0.0, // Disabled by default
+            uniforms: BuildingMaterialUniforms {
+                base_color: LinearRgba::WHITE,
+                time_of_day: 0.5,
+                use_textures: 0.0, // Disabled by default
+                pom_scale: 0.05,
+                pom_layers: 32.0,
+            },
             facade_albedo: None,
             facade_normal: None,
+            facade_roughness: None,
+            facade_metallic: None,
+            facade_height: None,
         }
     }
 }
 
 impl BuildingInstancedMaterial {
-    /// Create a material with texture arrays enabled.
-    pub fn with_textures(
+    /// Create a material with all PBR texture arrays enabled.
+    pub fn with_pbr_textures(
         albedo: Handle<Image>,
         normal: Handle<Image>,
+        roughness: Handle<Image>,
+        metallic: Handle<Image>,
+        height: Handle<Image>,
     ) -> Self {
         Self {
-            base_color: LinearRgba::WHITE,
-            time_of_day: 0.5,
-            use_textures: 1.0,
+            uniforms: BuildingMaterialUniforms {
+                base_color: LinearRgba::WHITE,
+                time_of_day: 0.5,
+                use_textures: 1.0,
+                pom_scale: 0.05,
+                pom_layers: 32.0,
+            },
             facade_albedo: Some(albedo),
             facade_normal: Some(normal),
+            facade_roughness: Some(roughness),
+            facade_metallic: Some(metallic),
+            facade_height: Some(height),
         }
     }
 }
@@ -510,4 +548,47 @@ fn sample_terrain_height(
 
     // Normalize and scale
     (height / max_amplitude) * height_scale
+}
+
+// ============================================================================
+// Building PBR Material Initialization
+// ============================================================================
+
+/// Handle to the PBR material for buildings.
+/// This is created once textures are generated and used by the building spawner.
+#[derive(Resource, Default)]
+pub struct BuildingPbrMaterialHandle {
+    pub handle: Option<Handle<BuildingInstancedMaterial>>,
+    pub initialized: bool,
+}
+
+/// Run condition: initialize PBR material when facade textures are ready.
+fn should_init_pbr_material(
+    textures_generated: Res<FacadeTexturesGenerated>,
+    pbr_material: Res<BuildingPbrMaterialHandle>,
+) -> bool {
+    textures_generated.0 && !pbr_material.initialized
+}
+
+/// System to create the BuildingInstancedMaterial with all PBR texture arrays.
+fn initialize_building_pbr_material(
+    mut pbr_material: ResMut<BuildingPbrMaterialHandle>,
+    facade_textures: Res<FacadeTextureArray>,
+    mut materials: ResMut<Assets<BuildingInstancedMaterial>>,
+) {
+    info!("Initializing BuildingInstancedMaterial with PBR texture arrays...");
+
+    let material = BuildingInstancedMaterial::with_pbr_textures(
+        facade_textures.albedo.clone(),
+        facade_textures.normal.clone(),
+        facade_textures.roughness.clone(),
+        facade_textures.metallic.clone(),
+        facade_textures.height.clone(),
+    );
+
+    let handle = materials.add(material);
+    pbr_material.handle = Some(handle);
+    pbr_material.initialized = true;
+
+    info!("BuildingInstancedMaterial initialized with full PBR+ support");
 }

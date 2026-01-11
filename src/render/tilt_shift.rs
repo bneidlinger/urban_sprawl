@@ -145,7 +145,7 @@ impl Default for TiltShiftSettings {
 
 /// Render label for the tilt-shift node.
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct TiltShiftLabel;
+pub struct TiltShiftLabel;
 
 /// Render node that applies the tilt-shift effect.
 #[derive(Default)]
@@ -247,7 +247,8 @@ impl FromWorld for TiltShiftPipeline {
                         shader_defs: vec![],
                         entry_point: "fragment".into(),
                         targets: vec![Some(ColorTargetState {
-                            format: TextureFormat::Rgba8UnormSrgb,
+                            // Use HDR format to match the camera's HDR output (required for bloom)
+                            format: TextureFormat::Rgba16Float,
                             blend: None,
                             write_mask: ColorWrites::ALL,
                         })],

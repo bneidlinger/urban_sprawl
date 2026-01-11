@@ -1,7 +1,8 @@
 //! Moving vehicle traffic system.
 //!
 //! Spawns vehicles that drive along the road network, following waypoints
-//! and stopping at intersections.
+//! and stopping at intersections. Supports multiple vehicle types including
+//! sedans, SUVs, trucks, vans, and buses.
 
 use bevy::prelude::*;
 use noise::{NoiseFn, Perlin};
@@ -13,7 +14,211 @@ use crate::procgen::roads::{RoadGraph, RoadNodeType, RoadType};
 use crate::render::instancing::TerrainConfig;
 use crate::render::road_mesh::RoadMeshGenerated;
 use crate::render::traffic_lights::{LightPhase, TrafficLightController};
+use crate::render::vehicle_meshes::{generate_vehicle_mesh, generate_wheel_mesh, VehicleMeshConfig, VehicleShape};
 use crate::simulation::vehicles::{MovingVehicle, VehicleNavigation};
+
+/// Different types of vehicles with varying sizes and speeds.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VehicleType {
+    Sedan,
+    SUV,
+    Truck,
+    Van,
+    Bus,
+    // Emergency vehicles
+    PoliceCar,
+    FireTruck,
+    Ambulance,
+}
+
+impl VehicleType {
+    /// Get vehicle dimensions (length, width, height).
+    pub fn dimensions(&self) -> (f32, f32, f32) {
+        match self {
+            VehicleType::Sedan => (4.2, 1.7, 1.3),
+            VehicleType::SUV => (4.8, 1.9, 1.7),
+            VehicleType::Truck => (5.5, 2.0, 2.2),
+            VehicleType::Van => (5.0, 1.9, 2.0),
+            VehicleType::Bus => (12.0, 2.5, 3.2),
+            VehicleType::PoliceCar => (4.5, 1.8, 1.4),
+            VehicleType::FireTruck => (9.0, 2.4, 3.0),
+            VehicleType::Ambulance => (6.0, 2.1, 2.4),
+        }
+    }
+
+    /// Get cabin dimensions relative to body.
+    pub fn cabin_dimensions(&self) -> (f32, f32, f32) {
+        let (length, width, height) = self.dimensions();
+        match self {
+            VehicleType::Sedan => (length * 0.5, width * 0.9, height * 0.4),
+            VehicleType::SUV => (length * 0.6, width * 0.9, height * 0.5),
+            VehicleType::Truck => (length * 0.35, width * 0.9, height * 0.4),
+            VehicleType::Van => (length * 0.7, width * 0.9, height * 0.6),
+            VehicleType::Bus => (length * 0.85, width * 0.95, height * 0.7),
+            VehicleType::PoliceCar => (length * 0.5, width * 0.9, height * 0.4),
+            VehicleType::FireTruck => (length * 0.3, width * 0.9, height * 0.45),
+            VehicleType::Ambulance => (length * 0.7, width * 0.95, height * 0.7),
+        }
+    }
+
+    /// Get cabin offset from center (trucks/fire trucks have cab at front).
+    pub fn cabin_offset(&self) -> f32 {
+        let (length, _, _) = self.dimensions();
+        match self {
+            VehicleType::Truck => length * 0.25,
+            VehicleType::FireTruck => length * 0.3,
+            _ => 0.0,
+        }
+    }
+
+    /// Get speed multiplier for this vehicle type.
+    pub fn speed_multiplier(&self) -> f32 {
+        match self {
+            VehicleType::Sedan => 1.0,
+            VehicleType::SUV => 0.95,
+            VehicleType::Truck => 0.75,
+            VehicleType::Van => 0.85,
+            VehicleType::Bus => 0.7,
+            // Emergency vehicles go faster!
+            VehicleType::PoliceCar => 1.3,
+            VehicleType::FireTruck => 1.1,
+            VehicleType::Ambulance => 1.2,
+        }
+    }
+
+    /// Get spawn weight (relative probability).
+    pub fn spawn_weight(&self) -> f32 {
+        match self {
+            VehicleType::Sedan => 40.0,
+            VehicleType::SUV => 25.0,
+            VehicleType::Truck => 10.0,
+            VehicleType::Van => 15.0,
+            VehicleType::Bus => 10.0,
+            // Emergency vehicles are rare
+            VehicleType::PoliceCar => 2.0,
+            VehicleType::FireTruck => 1.0,
+            VehicleType::Ambulance => 1.5,
+        }
+    }
+
+    /// Returns true if this is an emergency vehicle.
+    pub fn is_emergency(&self) -> bool {
+        matches!(self, VehicleType::PoliceCar | VehicleType::FireTruck | VehicleType::Ambulance)
+    }
+
+    /// Get the VehicleShape for mesh generation.
+    pub fn vehicle_shape(&self) -> VehicleShape {
+        match self {
+            VehicleType::Sedan | VehicleType::PoliceCar => VehicleShape::Sedan,
+            VehicleType::SUV => VehicleShape::SUV,
+            VehicleType::Truck | VehicleType::FireTruck => VehicleShape::Truck,
+            VehicleType::Van | VehicleType::Ambulance => VehicleShape::Van,
+            VehicleType::Bus => VehicleShape::Bus,
+        }
+    }
+
+    /// Get wheel radius for this vehicle type (larger for visibility).
+    pub fn wheel_radius(&self) -> f32 {
+        match self {
+            VehicleType::Sedan | VehicleType::PoliceCar => 0.38,
+            VehicleType::SUV => 0.44,
+            VehicleType::Truck | VehicleType::FireTruck => 0.48,
+            VehicleType::Van | VehicleType::Ambulance => 0.42,
+            VehicleType::Bus => 0.50,
+        }
+    }
+
+    /// Get mesh configuration for this vehicle type.
+    pub fn mesh_config(&self) -> VehicleMeshConfig {
+        let (length, width, height) = self.dimensions();
+        VehicleMeshConfig {
+            length,
+            width,
+            height,
+            shape: self.vehicle_shape(),
+        }
+    }
+
+    /// Get the body color for this vehicle type.
+    pub fn body_color(&self, rng: &mut StdRng) -> (f32, f32, f32) {
+        match self {
+            VehicleType::PoliceCar => {
+                // Black and white police cars
+                if rng.gen_bool(0.5) {
+                    (0.1, 0.1, 0.12) // Black
+                } else {
+                    (0.95, 0.95, 0.95) // White
+                }
+            }
+            VehicleType::FireTruck => (0.8, 0.15, 0.1), // Fire engine red
+            VehicleType::Ambulance => (0.95, 0.95, 0.95), // White
+            _ => CAR_COLORS[rng.gen_range(0..CAR_COLORS.len())],
+        }
+    }
+
+    /// Pick a random vehicle type based on spawn weights.
+    pub fn random(rng: &mut StdRng) -> Self {
+        let all_types = [
+            VehicleType::Sedan,
+            VehicleType::SUV,
+            VehicleType::Truck,
+            VehicleType::Van,
+            VehicleType::Bus,
+            VehicleType::PoliceCar,
+            VehicleType::FireTruck,
+            VehicleType::Ambulance,
+        ];
+
+        let total_weight: f32 = all_types.iter().map(|v| v.spawn_weight()).sum();
+
+        let mut roll = rng.gen::<f32>() * total_weight;
+        for vtype in all_types {
+            roll -= vtype.spawn_weight();
+            if roll <= 0.0 {
+                return vtype;
+            }
+        }
+        VehicleType::Sedan
+    }
+}
+
+/// Component for emergency vehicle siren state.
+#[derive(Component)]
+pub struct EmergencySiren {
+    /// Current siren phase (0.0 to 1.0, wraps around)
+    pub phase: f32,
+    /// Siren cycle speed (cycles per second)
+    pub frequency: f32,
+    /// Whether siren is currently active
+    pub active: bool,
+}
+
+impl Default for EmergencySiren {
+    fn default() -> Self {
+        Self {
+            phase: 0.0,
+            frequency: 2.0, // 2 cycles per second
+            active: true,
+        }
+    }
+}
+
+/// Marker for emergency light entities.
+#[derive(Component)]
+pub struct EmergencyLight {
+    /// Parent vehicle entity
+    pub vehicle: Entity,
+    /// Which light bar position (0 = left, 1 = right)
+    pub position: u8,
+    /// Base color (red or blue)
+    pub color: EmergencyLightColor,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum EmergencyLightColor {
+    Red,
+    Blue,
+}
 
 pub struct MovingVehiclePlugin;
 
@@ -28,7 +233,10 @@ impl Plugin for MovingVehiclePlugin {
                     vehicle_traffic_light_check,
                     vehicle_movement,
                     vehicle_edge_transition,
+                    vehicle_lane_change,
                     vehicle_transform_sync,
+                    update_emergency_sirens,
+                    update_emergency_lights,
                 )
                     .chain(),
             );
@@ -41,9 +249,6 @@ pub struct MovingVehicleConfig {
     pub target_count: usize,
     pub base_speed: f32,
     pub speed_variation: f32,
-    pub car_length: f32,
-    pub car_width: f32,
-    pub car_height: f32,
     pub seed: u64,
 }
 
@@ -53,9 +258,6 @@ impl Default for MovingVehicleConfig {
             target_count: 25,
             base_speed: 12.0,       // ~43 km/h
             speed_variation: 0.15,  // +/- 15%
-            car_length: 4.2,
-            car_width: 1.7,
-            car_height: 1.3,
             seed: 99999,
         }
     }
@@ -127,25 +329,14 @@ fn spawn_moving_vehicles(
         return;
     }
 
-    // Create meshes
-    let body_mesh = meshes.add(Cuboid::new(
-        config.car_length,
-        config.car_height * 0.6,
-        config.car_width,
-    ));
-    let cabin_mesh = meshes.add(Cuboid::new(
-        config.car_length * 0.5,
-        config.car_height * 0.4,
-        config.car_width * 0.9,
-    ));
-
-    // Window material
-    let window_material = materials.add(StandardMaterial {
-        base_color: Color::srgba(0.1, 0.15, 0.2, 0.8),
-        perceptual_roughness: 0.1,
-        metallic: 0.3,
-        ..default()
-    });
+    // Bus-specific yellow/orange color
+    let bus_colors: &[(f32, f32, f32)] = &[
+        (0.9, 0.7, 0.1),  // Yellow school bus
+        (0.2, 0.4, 0.7),  // Blue city bus
+        (0.8, 0.3, 0.1),  // Orange transit
+        (0.1, 0.5, 0.3),  // Green eco bus
+        (0.9, 0.9, 0.9),  // White shuttle
+    ];
 
     let terrain = TerrainSampler::new(&terrain_config);
 
@@ -153,6 +344,10 @@ fn spawn_moving_vehicles(
     let to_spawn = (config.target_count - current_count).min(5); // Spawn max 5 per frame
 
     for _ in 0..to_spawn {
+        // Pick random vehicle type
+        let vehicle_type = VehicleType::random(rng);
+        let (length, width, height) = vehicle_type.dimensions();
+
         // Pick random intersection
         let start_node_idx = intersections[rng.gen_range(0..intersections.len())];
 
@@ -162,8 +357,23 @@ fn spawn_moving_vehicles(
             continue;
         }
 
-        // Pick random edge
-        let edge_idx = edges[rng.gen_range(0..edges.len())];
+        // Pick random edge (buses prefer major roads)
+        let edge_idx = if vehicle_type == VehicleType::Bus {
+            // Prefer major roads for buses
+            let major_edges: Vec<EdgeIndex> = edges.iter().copied().filter(|&e| {
+                road_graph.edge_by_index(e).map(|edge| {
+                    matches!(edge.road_type, RoadType::Major | RoadType::Highway)
+                }).unwrap_or(false)
+            }).collect();
+            if !major_edges.is_empty() {
+                major_edges[rng.gen_range(0..major_edges.len())]
+            } else {
+                edges[rng.gen_range(0..edges.len())]
+            }
+        } else {
+            edges[rng.gen_range(0..edges.len())]
+        };
+
         let Some((node_a, node_b)) = road_graph.edge_endpoints(edge_idx) else {
             continue;
         };
@@ -175,9 +385,9 @@ fn spawn_moving_vehicles(
             (false, node_a)
         };
 
-        // Random speed with variation
+        // Random speed with variation, adjusted by vehicle type
         let speed_mult = 1.0 + rng.gen_range(-config.speed_variation..config.speed_variation);
-        let target_speed = config.base_speed * speed_mult;
+        let target_speed = config.base_speed * speed_mult * vehicle_type.speed_multiplier();
 
         // Get road type to adjust speed
         let edge = road_graph.edge_by_index(edge_idx).unwrap();
@@ -189,14 +399,24 @@ fn spawn_moving_vehicles(
         };
         let final_speed = target_speed * road_speed_mult;
 
-        // Random car color
-        let (r, g, b) = CAR_COLORS[rng.gen_range(0..CAR_COLORS.len())];
-        let car_material = materials.add(StandardMaterial {
+        // Pick color based on vehicle type
+        let (r, g, b) = if vehicle_type == VehicleType::Bus {
+            bus_colors[rng.gen_range(0..bus_colors.len())]
+        } else {
+            vehicle_type.body_color(rng)
+        };
+
+        // Car/bus paint is NOT metallic - it's clear coat over pigment
+        let body_material = materials.add(StandardMaterial {
             base_color: Color::srgb(r, g, b),
-            perceptual_roughness: 0.4,
-            metallic: 0.6,
+            perceptual_roughness: 0.5,  // Moderate shine, not mirror-like
+            metallic: 0.0,              // Vehicle paint is dielectric, not metallic
+            reflectance: 0.35,          // Standard clear coat reflectance
             ..default()
         });
+
+        // Create realistic vehicle mesh using procedural generator
+        let body_mesh = meshes.add(generate_vehicle_mesh(&vehicle_type.mesh_config()));
 
         // Get initial position
         let points = &edge.points;
@@ -208,16 +428,18 @@ fn spawn_moving_vehicles(
         };
 
         let terrain_height = terrain.sample(pos.x, pos.y);
-        let body_y = terrain_height + config.car_height * 0.5;
+        let road_surface = terrain_height + 0.12; // Road height offset
+        let body_y = road_surface + height * 0.35;
         let angle = dir.y.atan2(dir.x);
         let rotation = Quat::from_rotation_y(-angle);
 
-        // Spawn car body with navigation
-        commands.spawn((
-            Mesh3d(body_mesh.clone()),
-            MeshMaterial3d(car_material.clone()),
+        // Spawn vehicle body with navigation and type
+        let vehicle_entity = commands.spawn((
+            Mesh3d(body_mesh),
+            MeshMaterial3d(body_material.clone()),
             Transform::from_xyz(pos.x, body_y, pos.y).with_rotation(rotation),
             MovingVehicle,
+            vehicle_type,
             VehicleNavigation {
                 current_edge: edge_idx,
                 forward,
@@ -227,24 +449,87 @@ fn spawn_moving_vehicles(
                 destination_node: dest_node,
                 previous_node: Some(start_node_idx),
                 stopping: false,
+                // Lane offset: drive on the right side of the road
+                // Offset depends on road type (wider roads = more offset)
+                lane_offset: match edge.road_type {
+                    RoadType::Highway => 3.0, // 3m from center
+                    RoadType::Major => 2.0,   // 2m from center
+                    RoadType::Minor => 1.5,   // 1.5m from center
+                    RoadType::Alley => 0.0,   // Center for narrow alleys
+                } * if forward { 1.0 } else { -1.0 }, // Right side based on direction
+                target_lane_offset: match edge.road_type {
+                    RoadType::Highway => 3.0,
+                    RoadType::Major => 2.0,
+                    RoadType::Minor => 1.5,
+                    RoadType::Alley => 0.0,
+                } * if forward { 1.0 } else { -1.0 },
             },
-        ));
+        )).id();
 
-        // Spawn cabin as child-like entity at same position
-        // (We'll update its position in sync system)
-        let cabin_y = body_y + config.car_height * 0.5;
-        commands.spawn((
-            Mesh3d(cabin_mesh.clone()),
-            MeshMaterial3d(window_material.clone()),
-            Transform::from_xyz(pos.x, cabin_y, pos.y).with_rotation(rotation),
-            MovingVehicle,
-            // No navigation - this is just visual, synced with body
-        ));
+        // Add emergency siren for emergency vehicles
+        if vehicle_type.is_emergency() {
+            commands.entity(vehicle_entity).insert(EmergencySiren {
+                phase: rng.gen::<f32>(), // Random starting phase
+                frequency: 2.0,
+                active: true,
+            });
+
+            // Spawn emergency lights on roof
+            let light_bar_height = height + 0.2;
+            let light_spread = width * 0.3;
+
+            // Determine light colors based on vehicle type
+            let (left_color, right_color) = match vehicle_type {
+                VehicleType::PoliceCar => (EmergencyLightColor::Red, EmergencyLightColor::Blue),
+                VehicleType::FireTruck => (EmergencyLightColor::Red, EmergencyLightColor::Red),
+                VehicleType::Ambulance => (EmergencyLightColor::Red, EmergencyLightColor::Red),
+                _ => (EmergencyLightColor::Red, EmergencyLightColor::Red),
+            };
+
+            // Left light
+            commands.spawn((
+                PointLight {
+                    color: Color::srgb(1.0, 0.0, 0.0),
+                    intensity: 50000.0,
+                    range: 15.0,
+                    radius: 0.1,
+                    shadows_enabled: false,
+                    ..default()
+                },
+                Transform::from_xyz(pos.x - light_spread * dir.y, body_y + light_bar_height, pos.y + light_spread * dir.x),
+                EmergencyLight {
+                    vehicle: vehicle_entity,
+                    position: 0,
+                    color: left_color,
+                },
+            ));
+
+            // Right light
+            commands.spawn((
+                PointLight {
+                    color: Color::srgb(0.0, 0.0, 1.0),
+                    intensity: 50000.0,
+                    range: 15.0,
+                    radius: 0.1,
+                    shadows_enabled: false,
+                    ..default()
+                },
+                Transform::from_xyz(pos.x + light_spread * dir.y, body_y + light_bar_height, pos.y - light_spread * dir.x),
+                EmergencyLight {
+                    vehicle: vehicle_entity,
+                    position: 1,
+                    color: right_color,
+                },
+            ));
+        }
+
+        // Note: Cabin is now integrated into the procedural vehicle mesh
+        // No separate cabin entity needed
     }
 
     if current_count + to_spawn >= config.target_count {
         initialized.0 = true;
-        info!("Spawned {} moving vehicles", config.target_count);
+        info!("Spawned {} moving vehicles (sedans, SUVs, trucks, vans, buses)", config.target_count);
     }
 }
 
@@ -390,6 +675,19 @@ fn vehicle_edge_transition(
             nav.target_speed = 12.0 * road_speed_mult; // Base speed * road mult
         }
 
+        // Update lane offset for new road
+        let new_lane_offset = if let Some(edge) = road_graph.edge_by_index(next_edge) {
+            let base_offset = match edge.road_type {
+                RoadType::Highway => 3.0,
+                RoadType::Major => 2.0,
+                RoadType::Minor => 1.5,
+                RoadType::Alley => 0.0,
+            };
+            base_offset * if forward { 1.0 } else { -1.0 }
+        } else {
+            0.0
+        };
+
         // Update navigation state
         nav.previous_node = Some(current_node);
         nav.current_edge = next_edge;
@@ -397,6 +695,29 @@ fn vehicle_edge_transition(
         nav.progress = if forward { 0.0 } else { 1.0 };
         nav.destination_node = dest_node;
         nav.stopping = false;
+        nav.target_lane_offset = new_lane_offset;
+        // Smooth transition to new lane over time
+    }
+}
+
+/// Smooth lane change system - interpolate current lane offset toward target.
+fn vehicle_lane_change(
+    time: Res<Time>,
+    mut vehicles: Query<&mut VehicleNavigation, With<MovingVehicle>>,
+) {
+    let dt = time.delta_secs();
+    let lane_change_speed = 2.0; // meters per second of lateral movement
+
+    for mut nav in vehicles.iter_mut() {
+        let diff = nav.target_lane_offset - nav.lane_offset;
+        if diff.abs() > 0.01 {
+            let change = diff.signum() * lane_change_speed * dt;
+            if change.abs() > diff.abs() {
+                nav.lane_offset = nav.target_lane_offset;
+            } else {
+                nav.lane_offset += change;
+            }
+        }
     }
 }
 
@@ -404,12 +725,11 @@ fn vehicle_edge_transition(
 fn vehicle_transform_sync(
     road_graph: Res<RoadGraph>,
     terrain_config: Res<TerrainConfig>,
-    config: Res<MovingVehicleConfig>,
-    mut vehicles: Query<(&VehicleNavigation, &mut Transform), With<MovingVehicle>>,
+    mut vehicles: Query<(&VehicleNavigation, &VehicleType, &mut Transform), With<MovingVehicle>>,
 ) {
     let terrain = TerrainSampler::new(&terrain_config);
 
-    for (nav, mut transform) in vehicles.iter_mut() {
+    for (nav, vehicle_type, mut transform) in vehicles.iter_mut() {
         let Some(edge) = road_graph.edge_by_index(nav.current_edge) else {
             continue;
         };
@@ -418,16 +738,25 @@ fn vehicle_transform_sync(
         let progress = nav.progress.clamp(0.0, 1.0);
 
         // Get position and direction along edge
-        let (pos, mut dir) = interpolate_edge_position(&edge.points, progress);
+        let (center_pos, mut dir) = interpolate_edge_position(&edge.points, progress);
 
         // Flip direction if traveling backward
         if !nav.forward {
             dir = -dir;
         }
 
-        // Update position with terrain height
+        // Apply lane offset (perpendicular to road direction)
+        // Positive offset = right side of road (in direction of travel)
+        let perp = Vec2::new(-dir.y, dir.x); // Perpendicular vector
+        let pos = center_pos + perp * nav.lane_offset;
+
+        // Get vehicle height from type
+        let (_, _, height) = vehicle_type.dimensions();
+
+        // Update position with terrain and road height
         let terrain_height = terrain.sample(pos.x, pos.y);
-        let body_y = terrain_height + config.car_height * 0.5;
+        let road_surface = terrain_height + 0.12; // Road height offset
+        let body_y = road_surface + height * 0.35;
 
         transform.translation.x = pos.x;
         transform.translation.y = body_y;
@@ -438,6 +767,72 @@ fn vehicle_transform_sync(
             let angle = dir.y.atan2(dir.x);
             transform.rotation = Quat::from_rotation_y(-angle);
         }
+    }
+}
+
+/// Update emergency siren phase for flashing effect.
+fn update_emergency_sirens(
+    time: Res<Time>,
+    mut sirens: Query<&mut EmergencySiren>,
+) {
+    let dt = time.delta_secs();
+
+    for mut siren in sirens.iter_mut() {
+        if siren.active {
+            siren.phase = (siren.phase + dt * siren.frequency) % 1.0;
+        }
+    }
+}
+
+/// Update emergency light intensity and position based on siren phase.
+fn update_emergency_lights(
+    vehicle_query: Query<(&Transform, &VehicleType, &EmergencySiren), With<MovingVehicle>>,
+    mut light_query: Query<(&EmergencyLight, &mut PointLight, &mut Transform), Without<MovingVehicle>>,
+) {
+    for (light, mut point_light, mut light_transform) in light_query.iter_mut() {
+        // Get the parent vehicle's transform and siren state
+        let Ok((vehicle_transform, vehicle_type, siren)) = vehicle_query.get(light.vehicle) else {
+            continue;
+        };
+
+        // Calculate flashing intensity based on siren phase and light position
+        // Left and right lights alternate
+        let flash_phase = if light.position == 0 {
+            siren.phase
+        } else {
+            (siren.phase + 0.5) % 1.0
+        };
+
+        // Sharp on/off flashing
+        let intensity = if flash_phase < 0.5 {
+            80000.0 // Bright
+        } else {
+            5000.0 // Dim but not off
+        };
+
+        point_light.intensity = intensity;
+
+        // Update color based on light type
+        point_light.color = match light.color {
+            EmergencyLightColor::Red => Color::srgb(1.0, 0.1, 0.05),
+            EmergencyLightColor::Blue => Color::srgb(0.1, 0.2, 1.0),
+        };
+
+        // Update position to follow vehicle
+        let (_, width, height) = vehicle_type.dimensions();
+        let right = vehicle_transform.right();
+        let light_spread = width * 0.3;
+        let light_bar_height = height * 0.5 + 0.3;
+
+        let offset = if light.position == 0 {
+            -right * light_spread
+        } else {
+            right * light_spread
+        };
+
+        light_transform.translation = vehicle_transform.translation
+            + offset
+            + Vec3::Y * light_bar_height;
     }
 }
 

@@ -55,7 +55,12 @@ The project targets 100,000+ rendered entities at 60 FPS using Bevy's ECS archit
 - **Window Instancing** - Batched window rendering reducing 320,000+ potential entities
 
 ### City Life
-- **Moving Vehicles** - Cars driving on roads with traffic light awareness
+- **Realistic Vehicles** - Angular box-based vehicle meshes with distinct shapes
+  - 7 vehicle types: Sedan, SUV, Truck, Van, Bus, SportsCar, Hatchback
+  - Proper hood, cabin, windshield, and trunk sections
+  - Trucks with cab + open bed, buses with rectangular passenger compartments
+  - Solid wheel meshes at vehicle corners
+- **Moving Traffic** - Vehicles driving on roads with traffic light awareness
 - **Pedestrians** - Citizens walking on sidewalks between intersections
 - **Street Furniture** - Lamps, traffic lights, fire hydrants, benches, parked cars
 

@@ -7,7 +7,11 @@
       "Bash(findstr:*)",
       "Bash(cargo run:*)",
       "Bash(timeout:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(cargo build:*)",
+      "Bash(powershell -Command \"Start-Process -FilePath cargo -ArgumentList ''run'' -RedirectStandardOutput app_output.log -RedirectStandardError app_error.log -NoNewWindow; Start-Sleep -Seconds 25; Stop-Process -Name isocitysim -Force -ErrorAction SilentlyContinue\")",
+      "Bash(ls:*)",
+      "WebSearch"
     ]
   }
 }

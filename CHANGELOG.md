@@ -4,7 +4,74 @@ All notable changes to IsoCitySim will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Realistic Vehicle Meshes** (`src/render/vehicle_meshes.rs`) - Angular box-based vehicle geometry
+  - 7 distinct vehicle shapes: Sedan, SUV, Truck, Van, Bus, SportsCar, Hatchback
+  - Box-based geometry with defined hood, cabin, trunk, and windshield sections
+  - Trucks have separate cab + open bed with visible side walls and tailgate
+  - Proper wheel meshes (solid cylinders) at vehicle corners
+  - Physically correct materials (non-metallic car paint with clear coat)
+- **PBR+ Material System** - Full physically-based rendering for building facades
+  - Roughness texture maps per facade type (brick rough, glass smooth)
+  - Metallic texture maps (metal panels reflective, others matte)
+  - Height maps for Parallax Occlusion Mapping (POM)
+  - `BuildingInstancedMaterial` with 5 texture array bindings
+  - `BuildingMaterialUniforms` with POM scale/layers parameters
+  - Per-facade POM depth: brick 0.06, metal 0.04, concrete 0.02, glass/painted 0.01
+  - Distance-based LOD (64 layers near → 8 layers at 150m → disabled beyond)
+  - Cook-Torrance BRDF lighting with GGX distribution
+  - POM self-shadowing for recessed areas
+- **Cinematic Polish Effects** (`src/render/cinematic_polish.rs`) - Film-like post-processing
+  - Film grain with animated procedural noise (4% intensity, stronger at night)
+  - Vignette with configurable radius and softness (25% intensity)
+  - Chromatic aberration at screen edges (0.3% intensity)
+  - Combined single-pass shader for efficiency
+  - Time-of-day integration (effects intensify at night)
+  - `CinematicPolishConfig` resource for runtime adjustment
+- **Tonemapping Options** - Switchable HDR tonemapping modes
+  - TonyMcMapface (default), AgX, ACES Fitted, Reinhard, None
+  - `TonemappingConfig` resource with runtime switching
+  - `TonemappingMode` enum for easy selection
+- **TAA Support** - Temporal Anti-Aliasing infrastructure
+  - `TaaConfig` resource (disabled by default for orthographic cameras)
+  - Can be enabled for perspective camera setups
+- **Bloom Post-Processing** - HDR bloom effect for glowing lights at night
+  - Added to camera with `BloomConfig` resource for customization
+  - Intensity scales with time of day (more pronounced at night)
+  - TonyMcMapface tonemapping for HDR rendering
+  - Updated tilt-shift shader to use HDR texture format (Rgba16Float)
+- **Celestial Bodies** (`src/render/celestial.rs`) - Moon and stars for the night sky
+  - Visible moon mesh that tracks moonlight direction
+  - 200 procedurally placed stars on sky dome
+  - Stars and moon visibility tied to day/night cycle
+  - Octahedron star meshes with color temperature variation
+- **Balconies** (`src/render/balconies.rs`) - Balconies on residential buildings
+  - Floor platforms with metal railings (3-sided)
+  - 60% of residential buildings receive balconies
+  - Random distribution across 1-2 building faces
+  - Multiple balconies per floor based on building width
+- **Storefronts with Awnings** (`src/render/storefronts.rs`) - Ground-level commercial details
+  - Colorful awnings at ground level of commercial buildings
+  - 8 awning colors plus white/striped variants
+  - Dark glass storefront windows below awnings
+  - 70% of commercial buildings receive storefronts
+- **Neon Signs** (`src/render/neon_signs.rs`) - Glowing signs on commercial buildings
+  - 8-color neon palette with emissive materials
+  - Spawned on commercial building facades
+  - Visibility tied to night hours
+- **Vehicle Lights** (`src/render/vehicle_lights.rs`) - Car headlights and taillights
+  - White headlights on front of vehicles
+  - Red taillights on rear of vehicles
+  - Point lights with appropriate colors and intensities
+
 ### Changed
+- **Vehicle Rendering Overhaul** - Improved vehicle visuals for parked and moving cars
+  - Replaced smooth cross-section meshes with angular box-based geometry
+  - Vehicles now have distinct hood, cabin, windshield, and trunk sections
+  - Increased wheel sizes for better visibility (20% larger)
+  - Fixed wheel orientation (now properly upright at vehicle corners)
+  - Corrected vehicle height to sit on road surface (not terrain)
+  - Reduced material shininess (metallic: 0.7 → 0.0, roughness: 0.35 → 0.5)
 - **Sandbox Mode Now Starts Blank** - True "blank canvas" experience for gameplay
   - Procedural lot extraction only runs in Procedural mode
   - Building spawning only runs in Procedural mode
