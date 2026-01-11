@@ -11,13 +11,17 @@ Urban Sprawl - A large-scale procedural city simulator built with Bevy (Rust ECS
 ```bash
 cargo build              # Build the project
 cargo run                # Run the simulator
+cargo run --release      # Optimized build (slower compile, faster runtime)
 cargo check              # Fast type checking without full build
 cargo test               # Run all tests
 cargo test test_name     # Run a specific test
 cargo clippy             # Run linter
+cargo fmt                # Format code
 ```
 
 **Windows Note:** The app forces Vulkan backend (`WGPU_BACKEND=vulkan`) because DX12 causes crashes on some systems.
+
+**First Build:** Takes several minutes due to Bevy compilation. Subsequent builds are fast with dynamic linking enabled.
 
 ## Architecture
 
@@ -33,6 +37,7 @@ All game systems are organized as Bevy plugins registered in `main.rs`:
 - **SimulationPlugin** (`simulation/`) - Economy, demand, population, traffic, services
 - **WorldPlugin** (`world/`) - Spatial partitioning, terrain
 - **UiPlugin** (`ui/`) - Debug overlays, toolbox, stats bar
+- **AudioPlugin** (`audio/`) - Ambient city sounds
 
 ### Procedural Generation Pipeline
 
@@ -157,3 +162,24 @@ Buildings spawn with varied shapes based on zone type:
 
 - Tensor Fields: [Chen et al. 2008 - Interactive Procedural Street Modeling](https://www.sci.utah.edu/~chengu/street_sig08/street_sig08.pdf)
 - Shape Grammars: [Mueller et al. 2006 - Procedural Modeling of Buildings](http://peterwonka.net/Publications/pdfs/2006.SG.Mueller.ProceduralModelingOfBuildings.final.pdf)
+
+## Keyboard Controls
+
+| Input | Action |
+|-------|--------|
+| WASD / Arrow Keys | Pan camera |
+| Mouse Wheel | Zoom in/out |
+| Q / E | Rotate camera |
+| R / C / I | Zone tool (Residential/Commercial/Industrial) |
+| D | Road drawing tool |
+| X | Demolish tool |
+| V | Query/inspect tool |
+| Escape | Deselect tool |
+| P | Pause simulation |
+| [ / ] | Slow down / Speed up time |
+| 1-4 | Time presets (Dawn/Day/Dusk/Night) |
+| F | Cycle weather state |
+| F5-F8 | Direct weather (Clear/Foggy/Rainy/Stormy) |
+| Shift+F | Toggle weather auto-cycle |
+| G | Cycle color grading presets |
+| Shift+G | Toggle auto color grading |
