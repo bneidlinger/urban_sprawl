@@ -109,15 +109,15 @@ struct StartButton;
 #[derive(Component)]
 struct BackButton;
 
-const BACKDROP: Color = Color::srgba(0.0, 0.02, 0.0, 0.9);
-const PANEL: Color = Color::srgba(0.03, 0.05, 0.04, 0.95);
-const BORDER: Color = Color::srgb(0.0, 0.65, 0.35);
-const PRIMARY_TEXT: Color = Color::srgb(0.7, 1.0, 0.75);
-const ACCENT_TEXT: Color = Color::srgb(1.0, 0.65, 0.3);
-const MUTED_TEXT: Color = Color::srgb(0.65, 0.75, 0.68);
-const BUTTON_IDLE: Color = Color::srgba(0.06, 0.08, 0.07, 0.95);
-const BUTTON_HOVER: Color = Color::srgba(0.08, 0.12, 0.1, 0.95);
-const BUTTON_SELECTED: Color = Color::srgba(0.1, 0.16, 0.12, 0.95);
+const BACKDROP: Color = Color::srgba(0.0, 0.0, 0.0, 0.94);
+const PANEL: Color = Color::srgba(0.02, 0.03, 0.02, 0.97);
+const BORDER: Color = Color::srgb(0.0, 0.75, 0.4);
+const PRIMARY_TEXT: Color = Color::srgb(0.7, 1.0, 0.8);
+const ACCENT_TEXT: Color = Color::srgb(1.0, 0.62, 0.2);
+const MUTED_TEXT: Color = Color::srgb(0.5, 0.75, 0.6);
+const BUTTON_IDLE: Color = Color::srgba(0.03, 0.05, 0.03, 0.98);
+const BUTTON_HOVER: Color = Color::srgba(0.06, 0.09, 0.06, 0.98);
+const BUTTON_SELECTED: Color = Color::srgba(0.08, 0.15, 0.1, 0.98);
 
 fn setup_menu(
     mut commands: Commands,

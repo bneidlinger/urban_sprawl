@@ -39,9 +39,10 @@ enum DemandType {
 }
 
 // Colors
-const BAR_BG: Color = Color::srgba(0.03, 0.05, 0.04, 0.9);
-const TEXT_COLOR: Color = Color::srgb(0.8, 0.95, 0.85);
-const MUTED_TEXT: Color = Color::srgb(0.6, 0.7, 0.65);
+const BAR_BG: Color = Color::srgba(0.02, 0.03, 0.02, 0.92);
+const TEXT_COLOR: Color = Color::srgb(0.7, 1.0, 0.8);
+const MUTED_TEXT: Color = Color::srgb(0.5, 0.75, 0.6);
+const BAR_BORDER: Color = Color::srgb(0.0, 0.7, 0.4);
 
 fn setup_stats_bar(mut commands: Commands, asset_server: Res<AssetServer>) {
     let font: Handle<Font> = asset_server.load("fonts/ShareTechMono-Regular.ttf");
@@ -54,6 +55,7 @@ fn setup_stats_bar(mut commands: Commands, asset_server: Res<AssetServer>) {
                 left: Val::Px(70.0), // Offset from toolbox
                 right: Val::Px(220.0), // Offset from HUD
                 padding: UiRect::axes(Val::Px(16.0), Val::Px(8.0)),
+                border: UiRect::all(Val::Px(1.0)),
                 flex_direction: FlexDirection::Row,
                 justify_content: JustifyContent::SpaceBetween,
                 align_items: AlignItems::Center,
@@ -61,6 +63,7 @@ fn setup_stats_bar(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             BackgroundColor(BAR_BG),
+            BorderColor(BAR_BORDER),
             StatsBarRoot,
         ))
         .with_children(|bar| {
